@@ -165,6 +165,18 @@ _L4_FRAMES: list[dict] = [
     {"inner": " ", "sep": ". ", "final": None, "final_is_oxford": False},
 ]
 
+# L4 shorthand/tabular frames: per-gene independent statuses rendered
+# as compact pairs. Same separator/inner matrix as L3 shorthand.
+_L4_SHORTHAND_FRAMES: list[dict] = [
+    {"inner": " ", "sep": ", "},
+    {"inner": " ", "sep": "; "},
+    {"inner": " ", "sep": " | "},
+    {"inner": " ", "sep": "\n"},
+    {"inner": ": ", "sep": ", "},
+    {"inner": ": ", "sep": "\n"},
+    {"inner": "\t", "sep": "\n"},
+]
+
 L3_MIN_N = 2
 L3_MAX_N = 4
 L3_OXFORD_PROB = 0.6
@@ -801,20 +813,29 @@ def render_l4_record(
     common: CommonConfig,
     rng: random.Random,
     n: Optional[int] = None,
+    complexity_level: str = "L4",
 ) -> RenderedRecord:
     """Render one L4 record: N genes, each with its own independently
     drawn status.
 
     Samples N distinct genes (N ∈ [L3_MIN_N, L3_MAX_N], capped at pool size),
     draws one status per gene from the gene's resolved population, and glues
-    the pairs into a single surface via one of :data:`_L4_FRAMES`. Each
-    :class:`AssertionFact` carries its own gene span AND its own status span
-    — statuses may diverge across facts.
+    the pairs into a single surface. Each :class:`AssertionFact` carries its
+    own gene span AND its own status span — statuses may diverge.
 
-    L4 is prose (formal ``positive_phrases`` / ``negation_phrases`` vocab);
-    variant descriptors and method slots are deferred to L5+. The caller is
+    ``complexity_level="L4"`` renders formal prose frames (:data:`_L4_FRAMES`
+    — ``positive_phrases``/``negation_phrases`` vocab + optional Oxford
+    ``and``). ``complexity_level="L4S"`` renders shorthand/tabular frames
+    (:data:`_L4_SHORTHAND_FRAMES` — ``positive_shorthand``/
+    ``negation_shorthand`` vocab, compact separators, no coordinator).
+
+    Variant descriptors and method slots are deferred to L5+. The caller is
     responsible for pool homogeneity (mutation-class vs expression-class).
     """
+    if complexity_level not in ("L4", "L4S"):
+        raise RenderError(
+            f"complexity_level must be 'L4' or 'L4S', got {complexity_level!r}"
+        )
     pool_size = len(biomarker_pool)
     if pool_size < L3_MIN_N:
         raise RenderError(
@@ -827,6 +848,7 @@ def render_l4_record(
         raise RenderError(f"n must be in [{L3_MIN_N}, {max_n}], got {n}")
 
     gene_names: list[str] = rng.sample(biomarker_pool, n)
+    status_phrase_level = "L1" if complexity_level == "L4" else "L2"
     gene_surfaces: list[str] = []
     statuses: list[str] = []
     status_surfaces: list[str] = []
@@ -837,11 +859,18 @@ def render_l4_record(
         status = sample_status(population, rng)
         form_id = _bare_gene_name_form(b, rng)
         gene_surface = b.name_forms.realizations[form_id]
-        _, raw = _sample_status_phrase(status, common, rng, complexity_level="L1")
+        _, raw = _sample_status_phrase(
+            status, common, rng, complexity_level=status_phrase_level
+        )
         status_surface = expand_placeholders(raw, {"gene": gene_surface})
         gene_surfaces.append(gene_surface)
         statuses.append(status)
         status_surfaces.append(status_surface)
+
+    if complexity_level == "L4S":
+        return _render_l4_shorthand(
+            gene_names, gene_surfaces, statuses, status_surfaces, rng
+        )
 
     frame = rng.choice(_L4_FRAMES)
     inner: str = frame["inner"]
@@ -889,6 +918,63 @@ def render_l4_record(
         assertions=tuple(assertions),
         frame_template=frame_template,
         complexity_level="L4",
+    )
+
+
+def _render_l4_shorthand(
+    gene_names: list[str],
+    gene_surfaces: list[str],
+    statuses: list[str],
+    status_surfaces: list[str],
+    rng: random.Random,
+) -> RenderedRecord:
+    """Glue per-gene (gene, status) shorthand pairs into one surface.
+
+    Parallels :func:`_render_l3_shorthand` but each gene has its own
+    shorthand status surface (drawn per-gene from per-gene population).
+    No terminal period — shorthand frames are tabular, not sentences.
+    """
+    frame = rng.choice(_L4_SHORTHAND_FRAMES)
+    inner = frame["inner"]
+    sep = frame["sep"]
+
+    pieces: list[str] = []
+    assertions: list[AssertionFact] = []
+    pos = 0
+    for i, (name, gene_surface, status, status_surface) in enumerate(
+        zip(gene_names, gene_surfaces, statuses, status_surfaces)
+    ):
+        if i > 0:
+            pieces.append(sep)
+            pos += len(sep)
+        gene_start = pos
+        pieces.append(gene_surface)
+        pos += len(gene_surface)
+        gene_end = pos
+        pieces.append(inner)
+        pos += len(inner)
+        status_start = pos
+        pieces.append(status_surface)
+        pos += len(status_surface)
+        status_end = pos
+        assertions.append(
+            AssertionFact(
+                gene=name,
+                status=status,
+                spans={
+                    "gene": (gene_start, gene_end),
+                    "status": (status_start, status_end),
+                },
+            )
+        )
+
+    sentence = "".join(pieces)
+    frame_template = f"{{gene}}{inner}{{status}}{sep}"
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=tuple(assertions),
+        frame_template=frame_template,
+        complexity_level="L4S",
     )
 
 
