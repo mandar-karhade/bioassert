@@ -17,13 +17,18 @@
     {
       "date": "2026-04-23",
       "change": "Extend gene-prefix strip to hyphen-boundary and negative_forms",
-      "reason": "Initial strip missed \"TMB-high\"/\"TMB-low\" (hyphen boundary) and TMB negative_forms (\"TMB {value} mut/Mb\"). Bug 3b remaining rate 1.71% → expected near zero.",
+      "reason": "Initial strip missed \"TMB-high\"/\"TMB-low\" (hyphen boundary) and TMB negative_forms (\"TMB {value} mut/Mb\"). Bug 3b remaining rate 1.71% \u2192 expected near zero.",
       "count": 5
+    },
+    {
+      "date": "2026-04-23",
+      "change": "Flatten status_distribution_by_population -> status_distribution",
+      "reason": "Dropped PatientProfile/population-cascade. biomarkers.json now describes a single cohort (current values seeded from former adenocarcinoma keys). Future multi-cohort work will live in separate config files."
     }
   ],
   "_schema_template": {
-    "description": "Reference structure — every biomarker entry follows this shape",
-    "canonical_name": "string — full formal name",
+    "description": "Reference structure \u2014 every biomarker entry follows this shape",
+    "canonical_name": "string \u2014 full formal name",
     "alteration_type": "mutation | fusion | amplification | expression | composite",
     "name_forms": {
       "description": "Surface variations of how the biomarker name appears",
@@ -38,9 +43,9 @@
         "category": "string label for grouping similar variants",
         "notes": "optional clinical context",
         "name_forms": "same structure as biomarker-level name_forms",
-        "measurement_range": "[min, max] — only for expression biomarkers with {value} placeholders",
+        "measurement_range": "[min, max] \u2014 only for expression biomarkers with {value} placeholders",
         "render_constraints": {
-          "require_biomarker_name_forms": "optional list — if present, biomarker-level name_form sampling is restricted to this subset (weights renormalized within subset)"
+          "require_biomarker_name_forms": "optional list \u2014 if present, biomarker-level name_form sampling is restricted to this subset (weights renormalized within subset)"
         }
       }
     },
@@ -55,18 +60,16 @@
       "variations": "dict",
       "realizations": "dict"
     },
-    "status_distribution_by_population": {
-      "description": "Prior probability of each status outcome, per simulated patient subpopulation. Keys follow composable multi-axis schema (see config_architecture.md Section 2.3). MUST include 'adenocarcinoma' and 'squamous' as terminal fallbacks.",
-      "<population_key>": {
-        "positive": "float",
-        "negative": "float",
-        "equivocal": "float",
-        "not_tested": "float"
-      }
-    },
     "preferred_methods": {
       "description": "Biomarker-specific weights for test methods. Keys MUST be a subset of common.test_methods.variations. Realizations are looked up in common.test_methods.realizations at render time (no local realizations dict).",
       "variations": "dict"
+    },
+    "status_distribution": {
+      "description": "Prior probability of each status outcome for the cohort this config describes. Four keys sum to 1.0.",
+      "positive": "float",
+      "negative": "float",
+      "equivocal": "float",
+      "not_tested": "float"
     }
   },
   "EGFR": {
@@ -160,7 +163,7 @@
         "actionable": true,
         "prevalence_within_biomarker": 0.08,
         "category": "exon_20_insertion",
-        "notes": "Heterogeneous — 60+ unique variants; many not detectable by PCR",
+        "notes": "Heterogeneous \u2014 60+ unique variants; many not detectable by PCR",
         "name_forms": {
           "variations": {
             "exon_20_insertion": 0.3,
@@ -266,43 +269,11 @@
         }
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma_western_nonsmoker_female": {
-        "positive": 0.4,
-        "negative": 0.58,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "adenocarcinoma_western_smoker": {
-        "positive": 0.08,
-        "negative": 0.9,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "adenocarcinoma_east_asian_nonsmoker": {
-        "positive": 0.5,
-        "negative": 0.48,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "adenocarcinoma_east_asian_smoker": {
-        "positive": 0.3,
-        "negative": 0.68,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "adenocarcinoma": {
-        "positive": 0.2,
-        "negative": 0.78,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "squamous": {
-        "positive": 0.03,
-        "negative": 0.95,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      }
+    "status_distribution": {
+      "positive": 0.2,
+      "negative": 0.78,
+      "equivocal": 0.01,
+      "not_tested": 0.01
     },
     "preferred_methods": {
       "variations": {
@@ -500,37 +471,11 @@
         }
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma_western_smoker": {
-        "positive": 0.3,
-        "negative": 0.68,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "adenocarcinoma_western_nonsmoker": {
-        "positive": 0.1,
-        "negative": 0.88,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "adenocarcinoma_east_asian": {
-        "positive": 0.12,
-        "negative": 0.86,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "adenocarcinoma": {
-        "positive": 0.25,
-        "negative": 0.73,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "squamous": {
-        "positive": 0.06,
-        "negative": 0.92,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      }
+    "status_distribution": {
+      "positive": 0.25,
+      "negative": 0.73,
+      "equivocal": 0.01,
+      "not_tested": 0.01
     },
     "preferred_methods": {
       "variations": {
@@ -648,25 +593,11 @@
         }
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma_nonsmoker_younger": {
-        "positive": 0.08,
-        "negative": 0.9,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "adenocarcinoma": {
-        "positive": 0.05,
-        "negative": 0.93,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "squamous": {
-        "positive": 0.003,
-        "negative": 0.985,
-        "equivocal": 0.01,
-        "not_tested": 0.002
-      }
+    "status_distribution": {
+      "positive": 0.05,
+      "negative": 0.93,
+      "equivocal": 0.01,
+      "not_tested": 0.01
     },
     "preferred_methods": {
       "variations": {
@@ -765,19 +696,11 @@
         }
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma": {
-        "positive": 0.015,
-        "negative": 0.975,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      },
-      "squamous": {
-        "positive": 0.002,
-        "negative": 0.988,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      }
+    "status_distribution": {
+      "positive": 0.015,
+      "negative": 0.975,
+      "equivocal": 0.005,
+      "not_tested": 0.005
     },
     "preferred_methods": {
       "variations": {
@@ -904,31 +827,11 @@
         }
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma_smoker": {
-        "positive": 0.035,
-        "negative": 0.955,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      },
-      "adenocarcinoma_nonsmoker": {
-        "positive": 0.015,
-        "negative": 0.975,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      },
-      "adenocarcinoma": {
-        "positive": 0.025,
-        "negative": 0.965,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      },
-      "squamous": {
-        "positive": 0.005,
-        "negative": 0.985,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      }
+    "status_distribution": {
+      "positive": 0.025,
+      "negative": 0.965,
+      "equivocal": 0.005,
+      "not_tested": 0.005
     },
     "preferred_methods": {
       "variations": {
@@ -1041,19 +944,11 @@
         }
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma": {
-        "positive": 0.06,
-        "negative": 0.92,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "squamous": {
-        "positive": 0.02,
-        "negative": 0.96,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      }
+    "status_distribution": {
+      "positive": 0.06,
+      "negative": 0.92,
+      "equivocal": 0.01,
+      "not_tested": 0.01
     },
     "preferred_methods": {
       "variations": {
@@ -1154,19 +1049,11 @@
         }
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma": {
-        "positive": 0.015,
-        "negative": 0.975,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      },
-      "squamous": {
-        "positive": 0.002,
-        "negative": 0.988,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      }
+    "status_distribution": {
+      "positive": 0.015,
+      "negative": 0.975,
+      "equivocal": 0.005,
+      "not_tested": 0.005
     },
     "preferred_methods": {
       "variations": {
@@ -1280,7 +1167,7 @@
       "other_mutation": {
         "actionable": false,
         "prevalence_within_biomarker": 0.05,
-        "notes": "L755S, V842I, G660D — less common mutations",
+        "notes": "L755S, V842I, G660D \u2014 less common mutations",
         "name_forms": {
           "variations": {
             "L755S": 0.4,
@@ -1295,19 +1182,11 @@
         }
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma": {
-        "positive": 0.025,
-        "negative": 0.965,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      },
-      "squamous": {
-        "positive": 0.003,
-        "negative": 0.987,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      }
+    "status_distribution": {
+      "positive": 0.025,
+      "negative": 0.965,
+      "equivocal": 0.005,
+      "not_tested": 0.005
     },
     "preferred_methods": {
       "variations": {
@@ -1417,19 +1296,11 @@
         }
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma": {
-        "positive": 0.003,
-        "negative": 0.987,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      },
-      "squamous": {
-        "positive": 0.001,
-        "negative": 0.989,
-        "equivocal": 0.005,
-        "not_tested": 0.005
-      }
+    "status_distribution": {
+      "positive": 0.003,
+      "negative": 0.987,
+      "equivocal": 0.005,
+      "not_tested": 0.005
     },
     "preferred_methods": {
       "variations": {
@@ -1488,7 +1359,7 @@
           },
           "realizations": {
             "TPS_percent_high": "TPS {value}%",
-            "TPS_gte_50": "TPS ≥50%",
+            "TPS_gte_50": "TPS \u226550%",
             "high_expression": "high expression",
             "strong_expression": "strong expression",
             "PD-L1_high": "high",
@@ -1538,8 +1409,8 @@
           },
           "realizations": {
             "CPS_value": "CPS {value}",
-            "CPS_gte_1": "CPS ≥1",
-            "CPS_gte_10": "CPS ≥10"
+            "CPS_gte_1": "CPS \u22651",
+            "CPS_gte_10": "CPS \u226510"
           }
         }
       }
@@ -1583,19 +1454,11 @@
         "clone_with_company": "(Dako 22C3 pharmDx)"
       }
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma": {
-        "positive": 0.6,
-        "negative": 0.38,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "squamous": {
-        "positive": 0.65,
-        "negative": 0.33,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      }
+    "status_distribution": {
+      "positive": 0.6,
+      "negative": 0.38,
+      "equivocal": 0.01,
+      "not_tested": 0.01
     },
     "preferred_methods": {
       "variations": {
@@ -1645,7 +1508,7 @@
             "TMB_high": "high",
             "TMB_H": "H",
             "TMB_value_mutMb": "{value} mut/Mb",
-            "TMB_gte_10": "≥10 mut/Mb",
+            "TMB_gte_10": "\u226510 mut/Mb",
             "high_TMB": "high TMB"
           }
         }
@@ -1671,19 +1534,11 @@
         9
       ]
     },
-    "status_distribution_by_population": {
-      "adenocarcinoma": {
-        "positive": 0.18,
-        "negative": 0.8,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      },
-      "squamous": {
-        "positive": 0.2,
-        "negative": 0.78,
-        "equivocal": 0.01,
-        "not_tested": 0.01
-      }
+    "status_distribution": {
+      "positive": 0.18,
+      "negative": 0.8,
+      "equivocal": 0.01,
+      "not_tested": 0.01
     },
     "preferred_methods": {
       "variations": {

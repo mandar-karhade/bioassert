@@ -17,7 +17,7 @@ The generator is structured along the seven-layer spec in [project_spec.md §3](
 | L3 Sentence grammar | Frame templates (what structure the sentence has) | `_L?_FRAMES`, `_L?_SHORTHAND_FRAMES`, `_L5_FRAMES`, `_L6_*`, `_L7_*` | [`bioassert/generator/renderer.py`](../bioassert/generator/renderer.py) |
 | L4 Complexity stratification | 7 complexity levels (L1–L7), orthogonal compounding tier (low/high) | `render_l{1..7}_record` entry points | [`bioassert/generator/renderer.py`](../bioassert/generator/renderer.py) |
 | L5 Technical/surface noise | 7 post-process transforms applied after render | `apply_technical_noise` | [`bioassert/generator/post_process.py`](../bioassert/generator/post_process.py) |
-| L6 Clinical realism | Status-prevalence sampling conditioned on `PatientProfile` | `resolve_status_distribution`, population-key cascade | [`bioassert/generator/patient_sampler.py`](../bioassert/generator/patient_sampler.py) |
+| L6 Clinical realism | Status-prevalence sampling against each biomarker's flat per-cohort distribution | `sample_status`, `StatusDistribution` | [`bioassert/generator/sampler.py`](../bioassert/generator/sampler.py) |
 
 Layer 7 (document-level composition — multi-paragraph pathology reports with distractor sections) is **deferred**. See [§7](#7-deferred-spec-layer-7-document-composition).
 
@@ -107,7 +107,7 @@ Tab-separated and newline-separated variants present. Same shared-status invaria
 {gene1} {status1}. {gene2} {status2}. {gene3} {status3}.
 ```
 
-**Assertions:** 2–8 facts, each with independently sampled status (per-gene prevalence conditioning via `PatientProfile`). Each fact gets its own gene span + own status span.
+**Assertions:** 2–8 facts, each with independently sampled status drawn from that gene's flat `status_distribution` in `biomarkers.json`. Each fact gets its own gene span + own status span.
 
 ### 2.6 L4S — L4 shorthand / tabular
 
@@ -212,7 +212,7 @@ Constants: `COMPOUND_LOW_N = 2`, `COMPOUND_HIGH_MIN = 3`, `COMPOUND_HIGH_MAX = 8
 
 ### 3.2 Status-distribution resolution
 
-Status (`positive` / `negative` / `equivocal` / `not_tested`) is **not** drawn from the vocab categories directly — it is drawn from the biomarker's population-keyed prevalence distribution in `biomarkers.json` (see [§5](#5-layer-6--prevalence-calibration)), then **surfaced** via the matching phrase category.
+Status (`positive` / `negative` / `equivocal` / `not_tested`) is **not** drawn from the vocab categories directly — it is drawn from the biomarker's flat `status_distribution` in `biomarkers.json` (see [§5](#5-layer-6--prevalence-calibration)), then **surfaced** via the matching phrase category.
 
 ---
 
@@ -236,7 +236,7 @@ Tier 1 panel coverage (11 biomarkers):
 | PD-L1 | 8 | `PD-L1`, `PDL1`, `PD L1`, `PD-L1 expression`, `CD274`, `programmed death ligand 1`, ... |
 | TMB | 5 | `TMB`, `tumor mutational burden`, `mutational burden`, `mutational load`, `tmb` |
 
-**Cascade keys:** per-gene status distributions live under population keys (e.g., `adenocarcinoma_east_asian_nonsmoker_younger_female`). The cascade is `histology_ethnicity_smoking_age_group_sex`, progressively dropped right-to-left on miss, with terminal fallback `{histology}`. See [§5](#5-layer-6--prevalence-calibration).
+**Status distribution:** each biomarker ships a single flat `status_distribution` (positive / negative / equivocal / not_tested, sums to 1.0) representing the target cohort. Multi-cohort corpora are produced by authoring separate `biomarkers.json` files and mixing generated output externally. See [§5](#5-layer-6--prevalence-calibration).
 
 ---
 
@@ -244,43 +244,44 @@ Tier 1 panel coverage (11 biomarkers):
 
 Prevalence sampling is a covariate on status selection only. It does **not** drive surface-text variation — see [project_spec.md Layer 6](project_spec.md#layer-6--probabilistic-clinical-realism).
 
-### 5.1 Patient axes ([`patient_sampler.py`](../bioassert/generator/patient_sampler.py))
+### 5.1 Flat per-biomarker distribution
 
-| Axis | Values | Population-key dropout order |
-|---|---|---|
-| histology (required) | `adenocarcinoma`, `squamous`, `other` | never dropped (terminal fallback) |
-| ethnicity | `western`, `east_asian`, `other` | 4th |
-| smoking | `smoker`, `former_smoker`, `nonsmoker` | 3rd |
-| age_group | `older`, `younger` | 2nd |
-| sex | `male`, `female` | 1st (most specific; first to drop) |
+Each biomarker in [`bioconfigs/biomarkers.json`](../bioconfigs/biomarkers.json) carries a single `status_distribution` field:
 
-Default axis distributions (embedded in `patient_sampler.py`):
-
-```
-histology:  adenocarcinoma 0.80 / squamous 0.18 / other 0.02
-ethnicity:  western 0.78 / east_asian 0.18 / other 0.04
-smoking:    smoker 0.55 / former_smoker 0.25 / nonsmoker 0.20
-age_group:  older 0.72 / younger 0.28
-sex:        male 0.52 / female 0.48
+```json
+"status_distribution": {
+  "positive": 0.20,
+  "negative": 0.70,
+  "equivocal": 0.02,
+  "not_tested": 0.08
+}
 ```
 
-### 5.2 Cascade semantics
+The four probabilities sum to 1.0 (validated at load time, tolerance 0.001). `sampler.sample_status(entry, rng)` draws from this distribution directly — no patient profile, no cascade, no fallback.
 
-For a biomarker `B` and profile `P`:
-1. Build the full key: `P.histology + "_" + P.ethnicity + "_" + P.smoking + "_" + P.age_group + "_" + P.sex`.
-2. If `B.population_status_distributions[key]` exists, use it.
-3. Else drop `sex`, try again. Then `age_group`, `smoking`, `ethnicity`.
-4. Terminal fallback: `B.population_status_distributions[P.histology]`. If even this is missing, log `population histology fallback: …` and fall back to `adenocarcinoma` (structural guarantee in Tier 1 panel).
+**Design rationale:** the NER / assertion-extraction task is invariant to who the patient is. A model reading "EGFR was positive" processes the same tokens whether the patient is a 72-year-old East-Asian non-smoker or a 45-year-old Western smoker. Demographic cascade was removed in v1.2 — patient-level factors add complexity without changing the supervised signal the benchmark measures. See [config_architecture.md §1.4](config_architecture.md).
 
-### 5.3 What the prevalence distributions encode
+### 5.2 Cohort scope and multi-cohort corpora
 
-Each leaf entry is `{positive: p, negative: q, equivocal: r, not_tested: s}` with `p+q+r+s = 1.0`. Sources: PIONEER (east-asian EGFR enrichment), AACR GENIE v13, LCMC, published meta-analyses. Citation list lives in [`prevalence_sources.bib`](../bioconfigs/prevalence_sources.bib) (in repo — Phase 2b deliverable).
+A single `biomarkers.json` describes **one cohort**. The shipped config targets lung adenocarcinoma, so prevalence values are adenocarcinoma-weighted averages across the PIONEER / GENIE / LCMC source studies.
 
-Key shaping priors:
-- EGFR in `adenocarcinoma_east_asian`: ~45% positive (PIONEER)
-- EGFR in `adenocarcinoma_western`: ~15% positive
-- KRAS in `adenocarcinoma_*_smoker`: 25–30% positive
-- ALK: ~5% positive across histologies
+For squamous cohorts, RNA-fusion-driven panels, or pan-tumor panels, author a separate `biomarkers.json` (reusing the same `common_variations.json`) and mix generated corpora externally at the target ratio:
+
+```bash
+python scripts/generate_corpus_v1.py --biomarkers bioconfigs/biomarkers_adeno.json --n 8000 --output adeno.jsonl
+python scripts/generate_corpus_v1.py --biomarkers bioconfigs/biomarkers_squamous.json --n 2000 --output squamous.jsonl
+cat adeno.jsonl squamous.jsonl | shuf > corpus.jsonl
+```
+
+### 5.3 Source priors
+
+Each distribution is sourced from PIONEER, AACR GENIE v13, LCMC, and published meta-analyses. Citation list lives in [`prevalence_sources.bib`](../bioconfigs/prevalence_sources.bib).
+
+Adenocarcinoma-weighted priors (shipped config):
+- EGFR: ~20% positive (cohort-weighted average across Western + East Asian)
+- KRAS: ~25% positive
+- ALK: ~5% positive
+- ROS1: ~1–2% positive
 - BRAF V600E: ~1–2% positive
 - PD-L1 ≥50%: ~30% positive
 - TMB high (≥10 mut/Mb): ~15–20%

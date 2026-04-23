@@ -1,15 +1,19 @@
-"""Pydantic models for the Phase 2a probability-weighted config.
+"""Pydantic models for the probability-weighted config.
 
-Shape follows config_architecture.md Sections 2.1–2.4 and 8. Structural
-invariants (sum-to-1 distributions, matched variations/realizations key sets,
-positivity bounds) are enforced here at load time via model validators. Cross-
-object invariants (preferred_methods ⊂ common.test_methods, render_constraints
-resolvability, placeholder grammar) live in ``validator.py`` because they need
-both configs.
+Shape follows config_architecture.md. Structural invariants (sum-to-1
+distributions, matched variations/realizations key sets, positivity bounds)
+are enforced here at load time via model validators. Cross-object invariants
+(preferred_methods ⊂ common.test_methods, render_constraints resolvability,
+placeholder grammar) live in ``validator.py`` because they need both configs.
 
 Every weighted distribution sums to 1.0 within a tolerance of
 :data:`WEIGHT_TOLERANCE`. Failures at this layer raise ``ValidationError``;
 loader fails loudly, generation never sees a malformed config.
+
+Each ``biomarkers.json`` describes a single cohort (e.g., NSCLC adenocarcinoma).
+Status prevalence is flat — positive/negative/equivocal/not_tested per biomarker,
+no patient-profile conditioning. Multi-cohort generation is handled externally
+by mixing corpora produced from separate cohort configs.
 """
 from __future__ import annotations
 
@@ -229,8 +233,13 @@ class NegativeForms(BaseModel):
         return self
 
 
-class PopulationStatus(BaseModel):
-    """Status-distribution row for one patient sub-population."""
+class StatusDistribution(BaseModel):
+    """Flat per-biomarker prior over positive/negative/equivocal/not_tested.
+
+    One distribution per biomarker for the cohort this config describes. No
+    patient-profile conditioning — to target a different cohort, author a
+    separate ``biomarkers.json`` and mix outputs externally.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -240,11 +249,11 @@ class PopulationStatus(BaseModel):
     not_tested: float
 
     @model_validator(mode="after")
-    def _validate(self) -> "PopulationStatus":
+    def _validate(self) -> "StatusDistribution":
         total = self.positive + self.negative + self.equivocal + self.not_tested
         if abs(total - 1.0) > WEIGHT_TOLERANCE:
             raise ValueError(
-                f"PopulationStatus probabilities sum to {total:.6f}, "
+                f"StatusDistribution probabilities sum to {total:.6f}, "
                 f"expected 1.0 (tolerance {WEIGHT_TOLERANCE})"
             )
         for name, v in (
@@ -254,7 +263,7 @@ class PopulationStatus(BaseModel):
             ("not_tested", self.not_tested),
         ):
             if not 0.0 <= v <= 1.0:
-                raise ValueError(f"PopulationStatus.{name} = {v} outside [0, 1]")
+                raise ValueError(f"StatusDistribution.{name} = {v} outside [0, 1]")
         return self
 
 
@@ -276,7 +285,7 @@ class PreferredMethods(BaseModel):
 
 
 class Biomarker(BaseModel):
-    """One biomarker entry: name forms, variants, population priors, methods."""
+    """One biomarker entry: name forms, variants, status prior, methods."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -288,25 +297,13 @@ class Biomarker(BaseModel):
     variants: dict[str, Variant]
     negative_forms: Optional[NegativeForms] = None
     clone_attribution: Optional[CloneAttribution] = None
-    status_distribution_by_population: dict[str, PopulationStatus]
+    status_distribution: StatusDistribution
     preferred_methods: Optional[PreferredMethods] = None
 
     @model_validator(mode="after")
     def _validate(self) -> "Biomarker":
         variant_prev = {vid: v.prevalence_within_biomarker for vid, v in self.variants.items()}
         _assert_weights_sum_to_one(variant_prev, f"{self.canonical_name}.variants")
-
-        pops = self.status_distribution_by_population
-        if "adenocarcinoma" not in pops:
-            raise ValueError(
-                f"{self.canonical_name}: missing terminal fallback "
-                f"'adenocarcinoma' in status_distribution_by_population"
-            )
-        if "squamous" not in pops:
-            raise ValueError(
-                f"{self.canonical_name}: missing terminal fallback 'squamous' "
-                f"in status_distribution_by_population"
-            )
 
         for variant_id, variant in self.variants.items():
             if variant.render_constraints is not None:

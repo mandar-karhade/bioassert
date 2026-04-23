@@ -1,15 +1,15 @@
-"""Generate the v1 corpus: mixed L1 + L2 records from the JSON-driven pipeline.
+"""Generate the v1 corpus: mixed L1–L7 records from the JSON-driven pipeline.
 
-Deterministic (seeded). Output: ``datasets/v1_phase2b/corpus.jsonl`` plus a
+Deterministic (seeded). Output: ``datasets/v1_phase3.10/corpus.jsonl`` plus a
 ``prevalence_report.json`` summarizing observed vs configured status rates
-per biomarker × matched population key.
+per biomarker.
 
-Phase 2b scope covers the full Tier 1 panel: mutation/fusion/composite
+Phase 3 scope covers the full Tier 1 panel: mutation/fusion/composite
 biomarkers plus the two expression biomarkers (PD-L1, TMB) with
-``negative_forms`` and IHC ``clone_attribution`` rendering. L1 records use
-formal prose frames; L2 records use tabular shorthand (``positive_shorthand``
-/ ``negation_shorthand`` vocabulary). The L2 mixing ratio is configurable
-via ``--l2-fraction``.
+``negative_forms`` and IHC ``clone_attribution`` rendering. Status
+distributions are flat per biomarker for the cohort described by
+``biomarkers.json`` — to target a different cohort, author a separate
+config and mix outputs externally.
 
 Re-run with different ``--seed`` to regenerate.
 """
@@ -20,16 +20,10 @@ import json
 import math
 import random
 from collections import Counter, defaultdict
-from dataclasses import asdict
 from pathlib import Path
 from typing import Iterator
 
 from bioassert.config import load_configs
-from bioassert.generator.patient_sampler import (
-    PatientProfile,
-    resolve_status_distribution,
-    sample_patient_profile,
-)
 from bioassert.generator.post_process import (
     PostProcessedRecord,
     apply_technical_noise,
@@ -125,11 +119,10 @@ def _iter_records(
     l7_fraction: float,
     compound_low: float,
     compound_high: float,
-) -> Iterator[tuple[PatientProfile, str, str, PostProcessedRecord]]:
+) -> Iterator[tuple[str, PostProcessedRecord]]:
     common, biomarkers = load_configs(COMMON_PATH, BIOMARKERS_PATH)
     rng = random.Random(seed)
-    for i in range(n):
-        profile = sample_patient_profile(f"p_{i:06d}", rng)
+    for _ in range(n):
         roll = rng.random()
         l3_prose_bound = l3_fraction
         l3s_bound = l3_fraction + l3s_fraction
@@ -143,90 +136,64 @@ def _iter_records(
             pool = _compound_pool(tier, rng)
             level = "L3" if roll < l3_prose_bound else "L3S"
             rendered = render_l3_record(
-                pool, profile, biomarkers, common, rng,
+                pool, biomarkers, common, rng,
                 complexity_level=level,
                 compounding_tier=tier,
             )
             post = apply_technical_noise(rendered, common, biomarkers, rng)
-            first_fact = rendered.assertions[0]
-            _, first_matched_key = resolve_status_distribution(
-                biomarkers.get(first_fact.gene), profile
-            )
-            yield profile, first_fact.gene, first_matched_key, post
+            yield rendered.assertions[0].gene, post
             continue
         if roll < l4s_bound:
             tier = _sample_tier(rng, compound_low)
             pool = _compound_pool(tier, rng)
             level = "L4" if roll < l4_bound else "L4S"
             rendered = render_l4_record(
-                pool, profile, biomarkers, common, rng,
+                pool, biomarkers, common, rng,
                 complexity_level=level,
                 compounding_tier=tier,
             )
             post = apply_technical_noise(rendered, common, biomarkers, rng)
-            first_fact = rendered.assertions[0]
-            _, first_matched_key = resolve_status_distribution(
-                biomarkers.get(first_fact.gene), profile
-            )
-            yield profile, first_fact.gene, first_matched_key, post
+            yield rendered.assertions[0].gene, post
             continue
         if roll < l5_bound:
             tier = _sample_tier(rng, compound_low)
             pool = _compound_pool(tier, rng)
             rendered = render_l5_record(
-                pool, profile, biomarkers, common, rng,
+                pool, biomarkers, common, rng,
                 compounding_tier=tier,
             )
             post = apply_technical_noise(rendered, common, biomarkers, rng)
-            first_fact = rendered.assertions[0]
-            _, first_matched_key = resolve_status_distribution(
-                biomarkers.get(first_fact.gene), profile
-            )
-            yield profile, first_fact.gene, first_matched_key, post
+            yield rendered.assertions[0].gene, post
             continue
         if roll < l6_bound:
             # L6 is single-gene regardless of shape; pool is the full panel
             # so any biomarker can surface with temporal/certainty qualifiers.
             rendered = render_l6_record(
-                list(PANEL_BIOMARKERS), profile, biomarkers, common, rng
+                list(PANEL_BIOMARKERS), biomarkers, common, rng
             )
             post = apply_technical_noise(rendered, common, biomarkers, rng)
-            first_fact = rendered.assertions[0]
-            _, first_matched_key = resolve_status_distribution(
-                biomarkers.get(first_fact.gene), profile
-            )
-            yield profile, first_fact.gene, first_matched_key, post
+            yield rendered.assertions[0].gene, post
             continue
         if roll < l7_bound:
             # L7 is single-fact multi-sentence regardless of shape; pool is
             # the full panel so any biomarker can surface in the claim.
             rendered = render_l7_record(
-                list(PANEL_BIOMARKERS), profile, biomarkers, common, rng
+                list(PANEL_BIOMARKERS), biomarkers, common, rng
             )
             post = apply_technical_noise(rendered, common, biomarkers, rng)
-            first_fact = rendered.assertions[0]
-            _, first_matched_key = resolve_status_distribution(
-                biomarkers.get(first_fact.gene), profile
-            )
-            yield profile, first_fact.gene, first_matched_key, post
+            yield rendered.assertions[0].gene, post
             continue
         gene = rng.choice(PANEL_BIOMARKERS)
-        _, matched_key = resolve_status_distribution(
-            biomarkers.get(gene), profile
-        )
         complexity_level = "L2" if roll < l7_bound + l2_fraction else "L1"
         rendered = render_l1_record(
-            gene, profile, biomarkers, common, rng,
+            gene, biomarkers, common, rng,
             complexity_level=complexity_level,
         )
         post = apply_technical_noise(rendered, common, biomarkers, rng)
-        yield profile, gene, matched_key, post
+        yield gene, post
 
 
 def _record_to_dict(
-    profile: PatientProfile,
-    gene: str,
-    matched_key: str,
     record: PostProcessedRecord,
     idx: int,
 ) -> dict:
@@ -247,7 +214,6 @@ def _record_to_dict(
                 "certainty": fact.certainty,
                 "sentence_index": fact.sentence_index,
                 "frame_template": record.frame_template,
-                "matched_population_key": matched_key,
             }
         )
         labeled_spans.extend(
@@ -261,7 +227,6 @@ def _record_to_dict(
         "compounding_tier": record.compounding_tier,
         "sentence": record.sentence,
         "sentences": list(record.sentences),
-        "patient_profile": asdict(profile),
         "assertions": assertions_out,
         "labeled_spans": labeled_spans,
         "post_process": record.applied_transforms,
@@ -439,8 +404,8 @@ def main() -> None:
     corpus_path = output_dir / "corpus.jsonl"
     report_path = output_dir / "prevalence_report.json"
 
-    status_counts: dict[tuple[str, str], Counter] = defaultdict(Counter)
-    totals_by_pair: Counter = Counter()
+    status_counts: dict[str, Counter] = defaultdict(Counter)
+    totals_by_gene: Counter = Counter()
     complexity_counts: Counter = Counter()
     # Compound-only: tier counts overall and per complexity level.
     compound_tier_counts: Counter = Counter()
@@ -458,7 +423,7 @@ def main() -> None:
     span_violations = 0
 
     with open(corpus_path, "w", encoding="utf-8") as f:
-        for idx, (profile, gene, matched_key, record) in enumerate(
+        for idx, (gene, record) in enumerate(
             _iter_records(
                 args.n,
                 args.seed,
@@ -474,10 +439,7 @@ def main() -> None:
                 args.compound_high,
             )
         ):
-            f.write(
-                json.dumps(_record_to_dict(profile, gene, matched_key, record, idx))
-                + "\n"
-            )
+            f.write(json.dumps(_record_to_dict(record, idx)) + "\n")
 
             for fact in record.assertions:
                 for name, (s, e) in fact.spans.items():
@@ -485,18 +447,16 @@ def main() -> None:
                         span_violations += 1
 
             # Prevalence bookkeeping: only L1/L2 records contribute to the
-            # per-(gene, population) status counts. L3/L3S draw status once
-            # from the first gene's distribution and apply it to every listed
-            # gene, so the per-gene empirical rate would be misleading. L4/L4S
-            # draw per-gene independently but span multiple genes, so the
-            # single report key wouldn't reflect them correctly. L5 forces
+            # per-gene status counts. L3/L3S draw status once from the first
+            # gene's distribution and apply it to every listed gene, so the
+            # per-gene empirical rate would be misleading. L4/L4S draw
+            # per-gene independently but span multiple genes. L5 forces
             # negative on all wide-scope facts and positive on the exception,
             # bypassing sampling entirely.
             if record.complexity_level in ("L1", "L2"):
-                pair_key = (gene, matched_key)
                 for fact in record.assertions:
-                    status_counts[pair_key][fact.status] += 1
-                    totals_by_pair[pair_key] += 1
+                    status_counts[gene][fact.status] += 1
+                    totals_by_gene[gene] += 1
             sentences_seen[record.sentence] += 1
             complexity_counts[record.complexity_level] += 1
             if record.complexity_level in _COMPOUND_LEVELS:
@@ -509,24 +469,20 @@ def main() -> None:
 
     common, biomarkers = load_configs(COMMON_PATH, BIOMARKERS_PATH)
 
-    per_pair_report: list[dict] = []
+    per_gene_report: list[dict] = []
     within_2sigma = 0
     total_checks = 0
-    for (gene, histology), total in sorted(totals_by_pair.items()):
-        entry = biomarkers.get(gene)
-        configured = entry.status_distribution_by_population.get(histology)
-        if configured is None:
-            continue
-        counts = status_counts[(gene, histology)]
+    for gene, total in sorted(totals_by_gene.items()):
+        configured = biomarkers.get(gene).status_distribution
+        counts = status_counts[gene]
         for status_name in ("positive", "negative", "equivocal", "not_tested"):
             observed_count = counts[status_name]
             observed_rate = observed_count / total
             configured_rate = getattr(configured, status_name)
             in_band = _two_sigma_within(observed_rate, configured_rate, total)
-            per_pair_report.append(
+            per_gene_report.append(
                 {
                     "gene": gene,
-                    "histology": histology,
                     "status": status_name,
                     "n": total,
                     "observed_count": observed_count,
@@ -602,7 +558,7 @@ def main() -> None:
         "span_violations": span_violations,
         "max_duplicate_sentence": max_dupe_sentence,
         "max_duplicate_count": max_dupe_count,
-        "per_pair": per_pair_report,
+        "per_gene": per_gene_report,
     }
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)

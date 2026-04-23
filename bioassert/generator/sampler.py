@@ -1,4 +1,4 @@
-"""Deterministic weighted sampling over the Phase 2a config (§2.3–§8.4).
+"""Deterministic weighted sampling over the config.
 
 Wraps :class:`random.Random` (stdlib) with helpers that speak the shapes of
 :mod:`bioassert.config.schema`. All entry points take an explicit ``rng``
@@ -13,13 +13,9 @@ from bioassert.config.loader import BiomarkerConfig, CommonConfig
 from bioassert.config.schema import (
     Biomarker,
     CloneAttribution,
-    PopulationStatus,
+    StatusDistribution,
     Variant,
     WeightedVariations,
-)
-from bioassert.generator.patient_sampler import (
-    PatientProfile,
-    resolve_status_distribution,
 )
 
 STATUS_NAMES: tuple[str, ...] = ("positive", "negative", "equivocal", "not_tested")
@@ -50,7 +46,7 @@ def sample_variation(
 
 
 def sample_status(
-    distribution: PopulationStatus, rng: random.Random
+    distribution: StatusDistribution, rng: random.Random
 ) -> str:
     """Sample one of positive / negative / equivocal / not_tested."""
     weights = {
@@ -135,17 +131,9 @@ def sample_measurement_value(
     return rng.uniform(lo, hi)
 
 
-def resolve_population(
-    biomarker: Biomarker, profile: PatientProfile
-) -> PopulationStatus:
-    dist, _key = resolve_status_distribution(biomarker, profile)
-    return dist
-
-
 __all__ = [
     "STATUS_NAMES",
     "maybe_sample_clone",
-    "resolve_population",
     "sample_biomarker_name_form",
     "sample_measurement_value",
     "sample_method",

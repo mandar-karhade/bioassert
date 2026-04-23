@@ -27,7 +27,6 @@ import random
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.renderer import (
     AssertionFact,
     L6_CERTAINTY_VOCAB,
@@ -92,10 +91,9 @@ def test_l6_temporal_emits_two_facts_same_gene(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(801)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l6_record(
-            list(GENES), profile, biomarkers, common, rng, shape="temporal"
+            list(GENES), biomarkers, common, rng, shape="temporal"
         )
         assert rec.complexity_level == "L6"
         assert rec.compounding_tier == "low"
@@ -118,10 +116,9 @@ def test_l6_certainty_emits_one_fact_with_certainty(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(803)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l6_record(
-            list(GENES), profile, biomarkers, common, rng, shape="certainty"
+            list(GENES), biomarkers, common, rng, shape="certainty"
         )
         assert rec.complexity_level == "L6"
         assert rec.compounding_tier == "low"
@@ -138,10 +135,9 @@ def test_l6_combined_emits_two_facts_with_both_qualifiers(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(805)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l6_record(
-            list(GENES), profile, biomarkers, common, rng, shape="combined"
+            list(GENES), biomarkers, common, rng, shape="combined"
         )
         assert rec.complexity_level == "L6"
         assert len(rec.assertions) == 2
@@ -163,10 +159,9 @@ def test_l6_random_shape_covers_all_three(
     uniformly. Over enough draws every shape should surface.
     """
     rng = random.Random(807)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     shapes_seen: set[str] = set()
     for _ in range(300):
-        rec = render_l6_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l6_record(list(GENES), biomarkers, common, rng)
         if len(rec.assertions) == 1:
             shapes_seen.add("certainty")
         elif any(f.certainty for f in rec.assertions):
@@ -180,10 +175,9 @@ def test_l6_rejects_unknown_shape(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(809)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(RenderError):
         render_l6_record(
-            list(GENES), profile, biomarkers, common, rng, shape="bogus"
+            list(GENES), biomarkers, common, rng, shape="bogus"
         )
 
 
@@ -194,9 +188,8 @@ def test_l6_every_fact_has_gene_and_status_span(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(811)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
-        rec = render_l6_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l6_record(list(GENES), biomarkers, common, rng)
         for fact in rec.assertions:
             assert "gene" in fact.spans
             assert "status" in fact.spans
@@ -210,9 +203,8 @@ def test_l6_gene_spans_are_literal_name_forms(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(813)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
-        rec = render_l6_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l6_record(list(GENES), biomarkers, common, rng)
         for fact in rec.assertions:
             gs, ge = fact.spans["gene"]
             surface = rec.sentence[gs:ge]
@@ -231,9 +223,8 @@ def test_l6_sentence_contains_temporal_markers(
     literal substring of the sentence — otherwise the label is unverifiable.
     """
     rng = random.Random(815)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rec = render_l6_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l6_record(list(GENES), biomarkers, common, rng)
         for fact in rec.assertions:
             if fact.temporal is not None:
                 assert fact.temporal in rec.sentence
@@ -243,9 +234,8 @@ def test_l6_sentence_contains_certainty_markers(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(817)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rec = render_l6_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l6_record(list(GENES), biomarkers, common, rng)
         for fact in rec.assertions:
             if fact.certainty is not None:
                 assert fact.certainty in rec.sentence
@@ -261,9 +251,8 @@ def test_l6_spans_non_overlapping_within_record(
     checking.
     """
     rng = random.Random(819)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rec = render_l6_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l6_record(list(GENES), biomarkers, common, rng)
         unique_spans: set[tuple[int, int]] = set()
         for fact in rec.assertions:
             for s, e in fact.spans.values():
@@ -286,11 +275,10 @@ def test_l6_temporal_vocab_is_exercised(
 ) -> None:
     """Over many draws every temporal term should surface."""
     rng = random.Random(821)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen: set[str] = set()
     for _ in range(800):
         rec = render_l6_record(
-            list(GENES), profile, biomarkers, common, rng, shape="temporal"
+            list(GENES), biomarkers, common, rng, shape="temporal"
         )
         for fact in rec.assertions:
             if fact.temporal:
@@ -302,11 +290,10 @@ def test_l6_certainty_vocab_is_exercised(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(823)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen: set[str] = set()
     for _ in range(800):
         rec = render_l6_record(
-            list(GENES), profile, biomarkers, common, rng, shape="certainty"
+            list(GENES), biomarkers, common, rng, shape="certainty"
         )
         for fact in rec.assertions:
             if fact.certainty:

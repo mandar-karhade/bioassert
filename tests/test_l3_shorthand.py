@@ -16,7 +16,6 @@ import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
 from bioassert.config.schema import WeightedVariations
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.renderer import (
     RenderedRecord,
     _L3_NAME_FORM_BLOCKLIST,
@@ -59,11 +58,9 @@ def test_l3_shorthand_complexity_level(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(101)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -78,11 +75,9 @@ def test_l3_shorthand_all_share_status_value(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(103)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -101,12 +96,10 @@ def test_l3_shorthand_status_uses_shorthand_vocab_when_pos_or_neg(
     """
     pos_vocab, neg_vocab = _shorthand_vocab(common)
     rng = random.Random(107)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     checked = 0
     for _ in range(500):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -131,11 +124,9 @@ def test_l3_shorthand_gene_spans_are_bare_surfaces(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(109)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -157,11 +148,9 @@ def test_l3_shorthand_spans_literal_substrings(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(113)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -179,11 +168,9 @@ def test_l3_shorthand_spans_non_overlapping(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(127)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -207,11 +194,9 @@ def test_l3_shorthand_gene_order_matches_fact_order(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(131)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -225,11 +210,9 @@ def test_l3_shorthand_no_variants(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(137)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -245,11 +228,9 @@ def test_l3_shorthand_expression_pool(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(139)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(50):
         rec = render_l3_record(
             list(EXPRESSION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -263,11 +244,9 @@ def test_l3_shorthand_rejects_invalid_complexity_level(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(Exception):
         render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -282,12 +261,10 @@ def test_l3_shorthand_status_spans_distinct_per_fact(
     own status span — distinct from the shared-span behavior of L3 prose.
     """
     rng = random.Random(149)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen_distinct = False
     for _ in range(100):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,

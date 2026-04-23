@@ -13,7 +13,6 @@ import random
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.renderer import (
     RenderedRecord,
     _coordinate_gene_list,
@@ -79,10 +78,9 @@ def test_l3_record_has_n_assertions(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(42)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         assert isinstance(rec, RenderedRecord)
         n = len(rec.assertions)
@@ -94,10 +92,9 @@ def test_l3_all_assertions_share_status(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(7)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         statuses = {a.status for a in rec.assertions}
         assert len(statuses) == 1, f"status diverged across facts: {statuses}"
@@ -107,10 +104,9 @@ def test_l3_all_genes_are_literal_substrings(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(3)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             start, end = fact.spans["gene"]
@@ -129,10 +125,9 @@ def test_l3_no_variants(
 ) -> None:
     """L3 is bare gene names — variant_id and negative_form_id always None."""
     rng = random.Random(9)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             assert fact.variant_id is None
@@ -144,10 +139,9 @@ def test_l3_shared_status_span_identical_across_facts(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(11)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         status_spans = {fact.spans["status"] for fact in rec.assertions}
         assert len(status_spans) == 1, (
@@ -160,10 +154,9 @@ def test_l3_spans_non_overlapping_within_record(
 ) -> None:
     """Gene spans must be disjoint; status span must not overlap any gene span."""
     rng = random.Random(13)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         gene_spans = sorted(fact.spans["gene"] for fact in rec.assertions)
         for i in range(1, len(gene_spans)):
@@ -183,10 +176,9 @@ def test_l3_gene_order_in_sentence_matches_fact_order(
 ) -> None:
     """Fact ordering follows the sentence's left-to-right gene order."""
     rng = random.Random(17)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         starts = [fact.spans["gene"][0] for fact in rec.assertions]
         assert starts == sorted(starts), (
@@ -198,10 +190,9 @@ def test_l3_genes_are_distinct_within_record(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(19)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         genes = [fact.gene for fact in rec.assertions]
         assert len(genes) == len(set(genes)), f"duplicate genes: {genes}"
@@ -212,10 +203,9 @@ def test_l3_expression_pool_only_supports_n2(
 ) -> None:
     """Expression class has only 2 biomarkers (PD-L1, TMB); N capped at 2."""
     rng = random.Random(23)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(50):
         rec = render_l3_record(
-            list(EXPRESSION_BIOMARKERS), profile, biomarkers, common, rng
+            list(EXPRESSION_BIOMARKERS), biomarkers, common, rng
         )
         assert len(rec.assertions) == 2
         assert {f.gene for f in rec.assertions} == set(EXPRESSION_BIOMARKERS)
@@ -226,10 +216,9 @@ def test_l3_frame_template_recorded(
 ) -> None:
     """Record stores the L3 frame template; must contain both placeholders."""
     rng = random.Random(29)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         assert "{gene_list}" in rec.frame_template
         assert "{status}" in rec.frame_template
@@ -239,9 +228,8 @@ def test_l3_rejects_pool_smaller_than_two(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(Exception):
-        render_l3_record(["EGFR"], profile, biomarkers, common, rng)
+        render_l3_record(["EGFR"], biomarkers, common, rng)
 
 
 def test_l3_gene_surfaces_are_bare(
@@ -255,10 +243,9 @@ def test_l3_gene_surfaces_are_bare(
     because ``mutational`` is a different word than ``mutation``.
     """
     rng = random.Random(31)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(500):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             s, e = fact.spans["gene"]
@@ -270,7 +257,7 @@ def test_l3_gene_surfaces_are_bare(
     rng = random.Random(37)
     for _ in range(200):
         rec = render_l3_record(
-            list(EXPRESSION_BIOMARKERS), profile, biomarkers, common, rng
+            list(EXPRESSION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             s, e = fact.spans["gene"]

@@ -1,23 +1,19 @@
-"""Cross-config validation for Phase 2a (config_architecture.md §7).
+"""Cross-config validation (config_architecture.md §7).
 
 Structural invariants (weights sum to 1.0, matched variation/realization key
-sets, bounded probabilities, terminal fallbacks) are enforced by the Pydantic
-models in :mod:`bioassert.config.schema`. This module handles the remaining
-checks that require looking at both configs together plus placeholder grammar
-against the supported table in §7.5.
+sets, bounded probabilities) are enforced by the Pydantic models in
+:mod:`bioassert.config.schema`. This module handles the remaining checks that
+require looking at both configs together plus placeholder grammar against the
+supported table in §7.5.
 
 Additional invariants enforced here:
  * ``preferred_methods`` keys are a subset of ``common.test_methods.variations``
  * ``render_constraints`` resolve to valid biomarker-level ``name_form`` keys
  * placeholders in realization strings are from the supported set
  * every realization carrying ``{value}`` has a backing ``measurement_range``
- * population keys follow canonical axis order (``histology``, ``ethnicity``,
-   ``smoking``, ``age_group``, ``sex``) — warning, not error, to avoid
-   breaking consumers that already shipped non-canonical keys
 """
 from __future__ import annotations
 
-import logging
 import re
 from typing import Iterable
 
@@ -29,27 +25,11 @@ from bioassert.config.schema import (
     WeightedVariations,
 )
 
-log = logging.getLogger(__name__)
-
 SUPPORTED_PLACEHOLDERS: frozenset[str] = frozenset(
     {"gene", "method", "result", "value", "variant"}
 )
 
 _PLACEHOLDER_RE = re.compile(r"\{([^{}]*)\}")
-
-_CANONICAL_HISTOLOGIES: frozenset[str] = frozenset({"adenocarcinoma", "squamous", "other"})
-_CANONICAL_ETHNICITIES: frozenset[str] = frozenset({"western", "east_asian", "other"})
-_CANONICAL_SMOKING: frozenset[str] = frozenset({"smoker", "nonsmoker", "former_smoker"})
-_CANONICAL_AGE: frozenset[str] = frozenset({"younger", "older"})
-_CANONICAL_SEX: frozenset[str] = frozenset({"female", "male"})
-
-_AXIS_ORDER: tuple[tuple[str, frozenset[str]], ...] = (
-    ("histology", _CANONICAL_HISTOLOGIES),
-    ("ethnicity", _CANONICAL_ETHNICITIES),
-    ("smoking", _CANONICAL_SMOKING),
-    ("age_group", _CANONICAL_AGE),
-    ("sex", _CANONICAL_SEX),
-)
 
 
 class ConfigValidationError(ValueError):
@@ -84,66 +64,6 @@ def _iter_realization_sources(
                 f"{biomarker_name}.clone_attribution",
                 entry.clone_attribution,
             )
-
-
-def _parse_population_key(key: str) -> list[tuple[str, str]]:
-    """Split a population key into (axis, value) tokens in canonical order.
-
-    Returns the parsed axis list if and only if the key obeys canonical axis
-    order; otherwise raises ``ConfigValidationError`` with a diagnostic. The
-    first token must always be a histology.
-    """
-    tokens = key.split("_")
-    if not tokens:
-        raise ConfigValidationError(f"empty population key {key!r}")
-    histology_tokens: list[str] = []
-    pieces = list(tokens)
-    consumed: list[tuple[str, str]] = []
-
-    axis_idx = 0
-    while pieces:
-        axis_name, axis_values = _AXIS_ORDER[axis_idx]
-        match: str | None = None
-        for length in range(min(4, len(pieces)), 0, -1):
-            candidate = "_".join(pieces[:length])
-            if candidate in axis_values:
-                match = candidate
-                break
-        if match is None:
-            if axis_idx + 1 < len(_AXIS_ORDER):
-                axis_idx += 1
-                continue
-            raise ConfigValidationError(
-                f"population key {key!r}: cannot place remaining tokens "
-                f"{'_'.join(pieces)!r} against canonical axis order"
-            )
-        consumed.append((axis_name, match))
-        pieces = pieces[len(match.split("_")):]
-        axis_idx += 1
-        if axis_idx >= len(_AXIS_ORDER) and pieces:
-            raise ConfigValidationError(
-                f"population key {key!r}: trailing tokens {'_'.join(pieces)!r} "
-                "after exhausting canonical axes"
-            )
-
-    if not consumed or consumed[0][0] != "histology":
-        raise ConfigValidationError(
-            f"population key {key!r}: first token must be a histology, got "
-            f"{consumed[0] if consumed else 'none'}"
-        )
-    _ = histology_tokens
-    return consumed
-
-
-def _validate_population_keys(biomarkers: BiomarkerConfig) -> list[str]:
-    problems: list[str] = []
-    for biomarker_name, entry in biomarkers.biomarkers.items():
-        for key in entry.status_distribution_by_population:
-            try:
-                _parse_population_key(key)
-            except ConfigValidationError as exc:
-                problems.append(f"{biomarker_name}: {exc}")
-    return problems
 
 
 def _validate_preferred_methods(
@@ -243,7 +163,6 @@ def validate_configs(common: CommonConfig, biomarkers: BiomarkerConfig) -> None:
     problems: list[str] = []
     problems.extend(_validate_preferred_methods(common, biomarkers))
     problems.extend(_validate_placeholders(common, biomarkers))
-    problems.extend(_validate_population_keys(biomarkers))
     if problems:
         joined = "\n  - ".join(problems)
         raise ConfigValidationError(
@@ -262,5 +181,4 @@ def describe_biomarker_shape(entry: Biomarker) -> dict[str, object]:
         "has_negative_forms": entry.negative_forms is not None,
         "has_clone_attribution": entry.clone_attribution is not None,
         "has_preferred_methods": entry.preferred_methods is not None,
-        "population_keys": sorted(entry.status_distribution_by_population),
     }

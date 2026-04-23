@@ -19,7 +19,6 @@ from pathlib import Path
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.post_process import (
     apply_technical_noise,
 )
@@ -147,8 +146,7 @@ def test_applied_transforms_contains_abbreviation_inconsistency_on_l1(
 ) -> None:
     """Single-fact L1 record reports the key even though it's a no-op."""
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
-    rendered = render_l1_record("EGFR", profile, biomarkers, common, rng)
+    rendered = render_l1_record("EGFR", biomarkers, common, rng)
     post = apply_technical_noise(rendered, common, biomarkers, rng)
     assert "abbreviation_inconsistency" in post.applied_transforms
     assert post.applied_transforms["abbreviation_inconsistency"] in (
@@ -162,11 +160,10 @@ def test_applied_transforms_contains_abbreviation_inconsistency_on_l6(
 ) -> None:
     """Multi-fact L6 record reports the key on the passthrough branch."""
     rng = random.Random(11)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen_mode = set()
     for _ in range(200):
         rendered = render_l6_record(
-            ["EGFR"], profile, biomarkers, common, rng
+            ["EGFR"], biomarkers, common, rng
         )
         post = apply_technical_noise(rendered, common, biomarkers, rng)
         assert "abbreviation_inconsistency" in post.applied_transforms
@@ -326,9 +323,8 @@ def test_single_fact_l1_is_always_no_op(
     mode=mixed is sampled.
     """
     rng = random.Random(5)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rendered = render_l1_record("ERBB2", profile, biomarkers, common, rng)
+        rendered = render_l1_record("ERBB2", biomarkers, common, rng)
         post = apply_technical_noise(rendered, common, biomarkers, rng)
         if post.applied_transforms.get("abbreviation_inconsistency") == "mixed":
             # Only one gene span — swap cannot change anything.
@@ -352,12 +348,11 @@ def test_render_l6_then_noise_produces_distinct_surfaces_eventually(
     is the headline user-visible signal of 3.11.
     """
     rng = random.Random(123)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     distinct_observed = 0
     repeat_observed = 0
     for _ in range(2000):
         rendered = render_l6_record(
-            ["ERBB2"], profile, biomarkers, common, rng
+            ["ERBB2"], biomarkers, common, rng
         )
         if len(rendered.assertions) < 2:
             continue

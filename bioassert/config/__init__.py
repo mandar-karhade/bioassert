@@ -1,8 +1,8 @@
-"""Probability-weighted variation config (Phase 2a).
+"""Probability-weighted variation config.
 
-Loads `common_variations.json` and `biomarkers.json` into typed Pydantic
-models, enforces the 12 validation rules from config_architecture.md Section 7,
-and exposes helpers the generator uses for weighted sampling.
+Loads ``common_variations.json`` and ``biomarkers.json`` into typed Pydantic
+models, enforces the cross-config invariants in ``validator.py``, and exposes
+helpers the generator uses for weighted sampling.
 """
 from bioassert.config.loader import (
     BiomarkerConfig,
@@ -15,10 +15,10 @@ from bioassert.config.schema import (
     Biomarker,
     CloneAttribution,
     NegativeForms,
-    PopulationStatus,
     PostProcessTransformations,
     PreferredMethods,
     RenderConstraints,
+    StatusDistribution,
     TransformationCategory,
     Variant,
     WeightedVariations,
@@ -30,10 +30,10 @@ __all__ = [
     "CloneAttribution",
     "CommonConfig",
     "NegativeForms",
-    "PopulationStatus",
     "PostProcessTransformations",
     "PreferredMethods",
     "RenderConstraints",
+    "StatusDistribution",
     "TransformationCategory",
     "Variant",
     "WeightedVariations",

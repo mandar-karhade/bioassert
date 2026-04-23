@@ -6,22 +6,24 @@
 - `common_variations.json` — surface variations shared across all biomarkers
 - `biomarkers.json` — per-biomarker surface variations
 
-**Scope:** This config is **Phase 2a** scope. Phase 1 ships with the simpler YAML ontology (EGFR/ALK/KRAS only, minimal surface variation) and is validated end-to-end first. Phase 2a migrates those three biomarkers to this schema. Phase 2b extends to the full Tier 1 panel.
+**Scope:** The config ships the full Tier 1 panel (mutation, fusion, composite, expression biomarkers). Status distributions are flat per biomarker for a single cohort described by `biomarkers.json` — to target a different cohort, author a separate config and mix outputs externally.
 
 ---
 
 ## Changelog
 
-**v1.1** (post-review fixes for the 9 open issues):
-- Scoped config as Phase 2a, not Phase 1 (Section 10 updated)
-- Normalized population keys across all biomarkers with documented cascade (Section 2.3)
+**v1.2** (flat-prevalence simplification):
+- Dropped `PatientProfile` and the multi-axis population-key cascade — patient demographics don't affect how an NER/assertion extraction model reads text.
+- Renamed `status_distribution_by_population` → `status_distribution` (flat per biomarker).
+- Removed `bioassert/generator/patient_sampler.py`; cohort mixing is now an external concern (separate `biomarkers.json` files mixed by a downstream heuristic).
+
+**v1.1** (post-review fixes):
 - Unified `prevalence_within_biomarker` field name (removed `_given_positive` suffix)
 - Pulled degenerate expression-biomarker "negative" variants into a separate `negative_forms` block
 - Extracted PD-L1 IHC clones into independent `clone_attribution` dimension
 - Documented fusion `unspecified_fusion` coupling via `render_constraints.require_biomarker_name_forms` (Section 8.3)
 - Documented placeholder substitution (`{gene}`, `{method}`, `{result}`, `{value}`) as first-class feature (Section 7.5)
 - Added `$schema_type` discriminator to `technical_noise`; documented loader dispatch (Section 7.6)
-- Fixed `biomarker_synth` → `bioassert` package paths throughout
 - Documented `preferred_methods` → `common.test_methods` realization join (Section 2.4)
 
 ---
@@ -44,10 +46,11 @@
 - The `realizations` dict maps variation_id → actual surface string
 - Separation lets you tune weights without touching strings, and vice versa
 
-**1.4 Prevalence is conditional and population-stratified**
-- Base biomarker prevalence depends on simulated patient population
+**1.4 Prevalence is flat per biomarker for the cohort**
+- `biomarkers.json` describes a single cohort (e.g., NSCLC adenocarcinoma)
+- Status prior is positive / negative / equivocal / not_tested per biomarker
 - Sub-variant prevalence is conditional on the biomarker having a meaningful result to report
-- This compositional structure mirrors actual clinical biology
+- Multi-cohort generation is handled externally by mixing corpora produced from separate cohort configs
 
 **1.5 Schema-type discriminated objects**
 - Nested dicts declare their schema shape via `$schema_type`
@@ -110,7 +113,7 @@ Top-level keys are biomarker names. Each biomarker entry follows the `_schema_te
 
   "name_forms": {"variations": {...}, "realizations": {...}},
   "variants": {"<variant_id>": {...}, ...},
-  "status_distribution_by_population": {"<population_key>": {...}, ...},
+  "status_distribution": {"positive": x, "negative": y, "equivocal": z, "not_tested": w},
   "preferred_methods": {"variations": {...}},
 
   "negative_forms": { ... },        // ONLY for expression biomarkers
@@ -137,43 +140,24 @@ Top-level keys are biomarker names. Each biomarker entry follows the `_schema_te
 - For mutation/fusion biomarkers: conditional probability given status=positive
 - For expression biomarkers: conditional probability given status is meaningful-positive (not negative). Negative renderings live in `negative_forms`.
 
-### 2.3 Population key schema and lookup cascade
+### 2.3 Flat status distribution
 
-Population keys follow a **composable multi-axis schema**. Axes, in canonical order:
+Each biomarker carries a single `status_distribution` over the four status labels:
 
-| Axis | Required | Values |
-|------|----------|--------|
-| `histology` | yes | `adenocarcinoma` \| `squamous` \| `other` |
-| `ethnicity` | no | `western` \| `east_asian` \| `other` |
-| `smoking` | no | `smoker` \| `nonsmoker` \| `former_smoker` |
-| `age_group` | no | `younger` \| `older` |
-| `sex` | no | `female` \| `male` |
+```json
+"status_distribution": {
+  "positive": 0.20,
+  "negative": 0.78,
+  "equivocal": 0.01,
+  "not_tested": 0.01
+}
+```
 
-Keys are formed by joining populated axes with `_` in canonical order. Missing axes mean "unstratified on this dimension."
+Weights sum to 1.0 ± 0.001; values are bounded in `[0, 1]`. The distribution is the prior the sampler draws from every time it picks a status for this biomarker — no patient-profile conditioning, no cascade.
 
-Examples:
-- `adenocarcinoma` — all lung adenocarcinoma (the general fallback)
-- `adenocarcinoma_western` — stratified on ethnicity only
-- `adenocarcinoma_western_nonsmoker` — stratified on ethnicity + smoking
-- `adenocarcinoma_western_nonsmoker_female` — fully stratified (EGFR's most specific bucket)
-- `squamous` — all squamous
+**Cohort scope.** One `biomarkers.json` = one cohort. The numbers shipped in the repo target lung adenocarcinoma (NSCLC). To target a different cohort (e.g., squamous, colorectal), author a new `biomarkers.json` with cohort-appropriate rates and mix the generated corpora externally at the ratio you want.
 
-**Terminal fallback requirement:** every biomarker MUST declare `adenocarcinoma` and `squamous` keys. Stratified keys are additive on top of these, not replacements. Loader validates this.
-
-**Lookup cascade** (most specific → most coarse):
-
-Given a simulated patient profile at generation time, the sampler computes candidate keys in decreasing specificity and returns the first match:
-
-1. Try full-stratification key (all applicable axes populated)
-2. Drop `sex` axis, retry
-3. Drop `age_group` axis, retry
-4. Drop `smoking` axis, retry
-5. Drop `ethnicity` axis, retry
-6. Fall back to `{histology}` alone (terminal fallback)
-
-If `{histology}` key is missing, loader error (should never happen post-validation).
-
-Sampler emits a WARNING log entry the first time it has to fall back past the most specific candidate key for a given biomarker + population combination. This surfaces undercoverage without breaking generation.
+**Why flat.** Demographic stratification (histology × ethnicity × smoking × age × sex) was removed in v1.2. The NER/assertion extraction task is invariant to who the patient is — labels are correct by construction regardless of the prevalence used to draw the status. Demographic cascade added configuration complexity without serving the task.
 
 ### 2.4 `preferred_methods` — weights-only override
 
@@ -193,38 +177,35 @@ Rationale: method realizations are canonical and domain-wide. A biomarker should
 Generation flow for one assertion:
 
 ```
-1. Sample patient profile (ethnicity, histology, smoking, sex, age_group)
-     ↓
-2. For each biomarker in the panel:
-   2a. Compute population key from profile
-   2b. Cascade-lookup status_distribution_by_population (Section 2.3)
-   2c. Sample status: positive | negative | equivocal | not_tested
-   2d. Branch on alteration_type and status:
+1. For each biomarker in the panel:
+   1a. Sample status from biomarker.status_distribution (Section 2.3):
+       positive | negative | equivocal | not_tested
+   1b. Branch on alteration_type and status:
        - expression + negative → sample from negative_forms
        - expression + positive → sample variant, then render with {value} if present
        - mutation/fusion + positive → sample variant from variants
        - any + equivocal → sample from common.equivocal_phrases
        - any + not_tested → sample from common.not_tested_phrases
-   2e. If variant has render_constraints.require_biomarker_name_forms:
+   1c. If variant has render_constraints.require_biomarker_name_forms:
        - Restrict biomarker name_form sampling to that subset (renormalize weights)
      Else:
        - Sample biomarker name_form from full distribution
-   2f. Sample assertion verb from common.assertion_verbs
-   2g. Sample test method: if biomarker.preferred_methods exists, use it; 
+   1d. Sample assertion verb from common.assertion_verbs
+   1e. Sample test method: if biomarker.preferred_methods exists, use it; 
        else common.test_methods. Look up realization in common.test_methods.realizations
-   2h. Sample temporality modifier from common.temporality_modifiers
-   2i. Sample certainty modifier from common.certainty_modifiers
-   2j. For PD-L1 (or any IHC biomarker with clone_attribution):
+   1f. Sample temporality modifier from common.temporality_modifiers
+   1g. Sample certainty modifier from common.certainty_modifiers
+   1h. For PD-L1 (or any IHC biomarker with clone_attribution):
        - Roll Bernoulli with clone_attribution.attachment_probability
        - If true, sample clone from clone_attribution.variations
      ↓
-3. Pick a sentence frame from grammar templates matching complexity level
+2. Pick a sentence frame from grammar templates matching complexity level
      ↓
-4. Render frame with sampled slot values (Section 7.5 placeholder substitution)
+3. Render frame with sampled slot values (Section 7.5 placeholder substitution)
      ↓
-5. Apply technical_noise transformations (whitespace, case, hyphenation) with their sampled probabilities
+4. Apply technical_noise transformations (whitespace, case, hyphenation) with their sampled probabilities
      ↓
-6. Emit (rendered_sentence, structured_assertion) pair with character spans
+5. Emit (rendered_sentence, structured_assertion) pair with character spans
 ```
 
 ---
@@ -236,7 +217,7 @@ Generation flow for one assertion:
 1. Add entry to `biomarkers.json` with all required fields
 2. Define `name_forms` (at least 3 variations summing to 1.0)
 3. Define `variants` (at least one entry; can be `unspecified_*` if no real sub-variants)
-4. Define `status_distribution_by_population` with at least `adenocarcinoma` and `squamous` keys
+4. Define `status_distribution` with positive/negative/equivocal/not_tested weights summing to 1.0
 5. Define `preferred_methods` if different from common defaults (optional)
 6. Add `negative_forms` if alteration_type is `expression`
 7. Add `clone_attribution` if IHC-based and clone reporting is common in real data
@@ -280,24 +261,23 @@ Weights are **not** meant to be exact. A 0.25 vs 0.30 difference is within calib
 
 ---
 
-## 6. Patient Profile Schema (Generator-Side)
+## 6. Multi-Cohort Generation (External)
 
-Generation samples a `PatientProfile` before sampling biomarker statuses. The profile schema:
+`biomarkers.json` is single-cohort. To target a different cohort (e.g., squamous NSCLC, colorectal, breast), author a separate `biomarkers.json` with that cohort's status priors. Mix generated corpora externally:
 
-```python
-class PatientProfile(BaseModel):
-    histology: Literal["adenocarcinoma", "squamous", "other"]
-    ethnicity: Optional[Literal["western", "east_asian", "other"]] = None
-    smoking: Optional[Literal["smoker", "nonsmoker", "former_smoker"]] = None
-    age_group: Optional[Literal["younger", "older"]] = None
-    sex: Optional[Literal["female", "male"]] = None
-    
-    def population_key_cascade(self) -> list[str]:
-        """Generate candidate population keys in decreasing specificity."""
-        # Section 2.3 cascade logic
+```bash
+# Example: 70% adenocarcinoma, 30% squamous
+python scripts/generate_corpus_v1.py \
+    --config bioconfigs/biomarkers_adenocarcinoma.json --n 7000 --seed 1 \
+    --output-dir /tmp/adeno
+python scripts/generate_corpus_v1.py \
+    --config bioconfigs/biomarkers_squamous.json --n 3000 --seed 2 \
+    --output-dir /tmp/squamous
+cat /tmp/adeno/corpus.jsonl /tmp/squamous/corpus.jsonl > mixed.jsonl
+shuf mixed.jsonl > mixed_shuffled.jsonl
 ```
 
-Patient profiles should themselves be sampled from a prevalence-weighted distribution matching NSCLC epidemiology. That sampling logic lives in `bioassert/generator/patient_sampler.py` (separate from biomarker sampling).
+The mixing ratio is a heuristic choice, not a schema concern.
 
 ---
 
@@ -308,15 +288,14 @@ The Pydantic loader must validate at load time:
 1. **Every `variations` dict has a matching `realizations` dict with identical keys**
 2. **Every `variations` dict sums to 1.0 ± 0.001**
 3. **Every biomarker's `variants` prevalences sum to 1.0 ± 0.001**
-4. **Every `status_distribution_by_population` entry sums to 1.0 ± 0.001**
-5. **Every biomarker has `adenocarcinoma` and `squamous` population keys (terminal fallbacks)**
-6. **Every `preferred_methods.variations` key exists in `common.test_methods.variations`**
-7. **Every `render_constraints.require_biomarker_name_forms` entry is a valid biomarker-level name_form key**
-8. **Every placeholder `{name}` in realization strings is in the supported table (Section 7.5)**
-9. **Every variant containing `{value}` in any realization has a `measurement_range`**
-10. **No duplicate variation_ids within a category**
-11. **All prevalence values are in [0.0, 1.0]**
-12. **`$schema_type` dispatch succeeds for every nested typed object**
+4. **Every `status_distribution` sums to 1.0 ± 0.001**
+5. **Every `preferred_methods.variations` key exists in `common.test_methods.variations`**
+6. **Every `render_constraints.require_biomarker_name_forms` entry is a valid biomarker-level name_form key**
+7. **Every placeholder `{name}` in realization strings is in the supported table (Section 7.5)**
+8. **Every variant containing `{value}` in any realization has a `measurement_range`**
+9. **No duplicate variation_ids within a category**
+10. **All prevalence values are in [0.0, 1.0]**
+11. **`$schema_type` dispatch succeeds for every nested typed object**
 
 Failure at load time (not generation time). Generation is deterministic only if configs are consistent.
 
@@ -425,8 +404,8 @@ EGFR T790M, C797S, ALK G1202R, ROS1 G2032R, etc. are encoded as variants with `a
 
 Reviewers of a clinical NLP paper will look for:
 
-- **Deterministic generation** — same seed → same output. ✓ (seeded numpy)
-- **Clinically plausible prevalence** — not uniform random. ✓ (stratified by population)
+- **Deterministic generation** — same seed → same output. ✓ (seeded stdlib random)
+- **Clinically plausible prevalence** — not uniform random. ✓ (per-biomarker cohort priors)
 - **Controlled diversity** — no single sentence frame dominates. ✓ (10+ variations per category)
 - **Traceability** — every label ties back to a config entry. ✓ (structured assertions reference variation IDs)
 - **Extensibility** — reproducible by other groups. ✓ (JSON is language-agnostic)
@@ -436,23 +415,17 @@ The alternative — LLM-generated synthetic data — fails on determinism, trace
 
 ---
 
-## 10. Phase 2a Implementation Checklist
+## 10. Module Layout
 
-When Claude Code builds the probabilistic variation layer in Phase 2a:
-
-- [ ] `bioassert/config/schema.py` — Pydantic models for common + biomarkers configs (with `$schema_type` discriminated unions)
-- [ ] `bioassert/config/loader.py` — JSON loading, model instantiation
-- [ ] `bioassert/config/validator.py` — runs all 12 validations from Section 7 at load time
-- [ ] `bioassert/generator/patient_sampler.py` — samples `PatientProfile`, emits population key cascade
-- [ ] `bioassert/generator/sampler.py` — weighted sampling with seeded numpy; handles cascade lookup, render_constraints, clone_attribution Bernoulli
-- [ ] `bioassert/generator/grammar.py` — templates with `{slot}` placeholders
-- [ ] `bioassert/generator/renderer.py` — composes sampled values into final sentences; handles placeholder substitution (Section 7.5)
-- [ ] `bioassert/generator/post_process.py` — applies `technical_noise` transformations
-- [ ] `bioassert/generator/spans.py` — tracks character spans for every labeled slot
-- [ ] Unit tests:
-  - Config loads and validates (all 12 checks)
+- `bioassert/config/schema.py` — Pydantic models for common + biomarkers configs (with `$schema_type` discriminated unions)
+- `bioassert/config/loader.py` — JSON loading, model instantiation
+- `bioassert/config/validator.py` — runs cross-config validations from Section 7 at load time
+- `bioassert/generator/sampler.py` — weighted sampling with seeded `random.Random`; handles `render_constraints`, `clone_attribution` Bernoulli
+- `bioassert/generator/renderer.py` — composes sampled values into final sentences; handles placeholder substitution (Section 7.5); L1–L7 complexity shapes
+- `bioassert/generator/post_process.py` — applies `technical_noise` transformations
+- Unit tests (`tests/`):
+  - Config loads and validates
   - All probability distributions sum to 1.0
-  - Population key cascade returns correct match order
   - `render_constraints` actually restricts name_form sampling
   - `clone_attribution` Bernoulli attachment works as expected
   - Placeholder substitution fills all placeholders and raises on unfilled

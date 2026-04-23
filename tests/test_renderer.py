@@ -6,7 +6,6 @@ import random
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.renderer import (
     RenderError,
     RenderedRecord,
@@ -50,8 +49,7 @@ def test_render_l1_record_returns_valid_sentence(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(42)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
-    rec = render_l1_record("EGFR", profile, biomarkers, common, rng)
+    rec = render_l1_record("EGFR", biomarkers, common, rng)
     assert isinstance(rec, RenderedRecord)
     assert rec.sentence
     assert "gene" in rec.assertions[0].spans
@@ -62,10 +60,9 @@ def test_gene_span_points_to_gene_surface(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(1)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         gene = rng.choice(MUTATION_BIOMARKERS)
-        rec = render_l1_record(gene, profile, biomarkers, common, rng)
+        rec = render_l1_record(gene, biomarkers, common, rng)
         start, end = rec.assertions[0].spans["gene"]
         assert 0 <= start < end <= len(rec.sentence)
         substring = rec.sentence[start:end]
@@ -79,12 +76,11 @@ def test_variant_span_when_present_matches_rendered_variant_surface(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(7)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     checked = 0
     attempts = 0
     while checked < 40 and attempts < 1000:
         attempts += 1
-        rec = render_l1_record("EGFR", profile, biomarkers, common, rng)
+        rec = render_l1_record("EGFR", biomarkers, common, rng)
         if "variant" not in rec.assertions[0].spans:
             continue
         start, end = rec.assertions[0].spans["variant"]
@@ -97,7 +93,6 @@ def test_method_span_when_present_matches_common_realizations(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(3)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     realizations = {
         r
         for r in common.categories["test_methods"].realizations.values()
@@ -108,7 +103,7 @@ def test_method_span_when_present_matches_common_realizations(
     while checked < 30 and attempts < 1000:
         attempts += 1
         rec = render_l1_record(
-            "EGFR", profile, biomarkers, common, rng, method_attach_prob=0.9
+            "EGFR", biomarkers, common, rng, method_attach_prob=0.9
         )
         if "method" not in rec.assertions[0].spans:
             continue
@@ -123,12 +118,11 @@ def test_expression_positive_renders_variant_with_value(
 ) -> None:
     """PD-L1 positive: descriptor slot filled from variants, {value}% possible."""
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     positive_seen = 0
     value_substituted = 0
     for _ in range(600):
         rec = render_l1_record(
-            "PD-L1", profile, biomarkers, common, rng, method_attach_prob=0.0
+            "PD-L1", biomarkers, common, rng, method_attach_prob=0.0
         )
         if rec.assertions[0].status != "positive":
             continue
@@ -150,7 +144,6 @@ def test_expression_negative_draws_from_negative_forms(
 ) -> None:
     """TMB negative: descriptor filled from negative_forms when frame renders it."""
     rng = random.Random(1)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     tmb = biomarkers.get("TMB")
     neg = tmb.negative_forms
     assert neg is not None
@@ -160,7 +153,7 @@ def test_expression_negative_draws_from_negative_forms(
     descriptor_rendered = 0
     for _ in range(600):
         rec = render_l1_record(
-            "TMB", profile, biomarkers, common, rng, method_attach_prob=0.0
+            "TMB", biomarkers, common, rng, method_attach_prob=0.0
         )
         if rec.assertions[0].status != "negative":
             continue
@@ -198,14 +191,13 @@ def test_clone_attribution_attaches_and_tracks_span(
 ) -> None:
     """PD-L1 records occasionally get a clone suffix with its own span."""
     rng = random.Random(2)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     clone_attributions = biomarkers.get("PD-L1").clone_attribution
     assert clone_attributions is not None
     clone_realizations = set(clone_attributions.realizations.values())
     clone_seen = 0
     for _ in range(400):
         rec = render_l1_record(
-            "PD-L1", profile, biomarkers, common, rng, method_attach_prob=0.0
+            "PD-L1", biomarkers, common, rng, method_attach_prob=0.0
         )
         if rec.assertions[0].clone_id is None:
             assert "clone" not in rec.assertions[0].spans
@@ -224,9 +216,8 @@ def test_rendered_spans_are_non_overlapping(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(11)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
-        rec = render_l1_record("EGFR", profile, biomarkers, common, rng)
+        rec = render_l1_record("EGFR", biomarkers, common, rng)
         spans = list(rec.assertions[0].spans.values())
         spans.sort()
         for i in range(1, len(spans)):
@@ -239,7 +230,6 @@ def test_status_span_matches_status_phrase_realization(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(5)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     categories = {
         "positive": common.categories["positive_phrases"].realizations.values(),
         "negative": common.categories["negation_phrases"].realizations.values(),
@@ -247,7 +237,7 @@ def test_status_span_matches_status_phrase_realization(
         "not_tested": common.categories["not_tested_phrases"].realizations.values(),
     }
     for _ in range(200):
-        rec = render_l1_record("EGFR", profile, biomarkers, common, rng)
+        rec = render_l1_record("EGFR", biomarkers, common, rng)
         start, end = rec.assertions[0].spans["status"]
         surface = rec.sentence[start:end]
         allowed = {r for r in categories[rec.assertions[0].status]}
@@ -265,11 +255,10 @@ def test_l2_positive_draws_from_positive_shorthand(
     """L2 positive records use the compact positive_shorthand realizations."""
     shorthand = set(common.categories["positive_shorthand"].realizations.values())
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen = 0
     for _ in range(400):
         rec = render_l1_record(
-            "EGFR", profile, biomarkers, common, rng, complexity_level="L2"
+            "EGFR", biomarkers, common, rng, complexity_level="L2"
         )
         if rec.assertions[0].status != "positive":
             continue
@@ -286,11 +275,10 @@ def test_l2_negative_draws_from_negation_shorthand(
     """L2 negative records use the compact negation_shorthand realizations."""
     shorthand = set(common.categories["negation_shorthand"].realizations.values())
     rng = random.Random(1)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen = 0
     for _ in range(400):
         rec = render_l1_record(
-            "KRAS", profile, biomarkers, common, rng, complexity_level="L2"
+            "KRAS", biomarkers, common, rng, complexity_level="L2"
         )
         if rec.assertions[0].status != "negative":
             continue
@@ -305,11 +293,9 @@ def test_l2_suppresses_variant_and_method(
 ) -> None:
     """L2 frames never render variant descriptor or method slot."""
     rng = random.Random(2)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
         rec = render_l1_record(
             "EGFR",
-            profile,
             biomarkers,
             common,
             rng,
@@ -326,14 +312,13 @@ def test_l2_frames_are_shorter_than_l1_on_average(
 ) -> None:
     """Sanity check: L2 sentences are meaningfully shorter than L1."""
     rng = random.Random(3)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     l1_len = 0
     l2_len = 0
     n = 300
     for _ in range(n):
-        l1 = render_l1_record("EGFR", profile, biomarkers, common, rng)
+        l1 = render_l1_record("EGFR", biomarkers, common, rng)
         l2 = render_l1_record(
-            "EGFR", profile, biomarkers, common, rng, complexity_level="L2"
+            "EGFR", biomarkers, common, rng, complexity_level="L2"
         )
         l1_len += len(l1.sentence)
         l2_len += len(l2.sentence)
@@ -347,11 +332,10 @@ def test_l2_spans_resolve_to_non_empty_substrings(
 ) -> None:
     """L2 records preserve the span-is-substring invariant."""
     rng = random.Random(4)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(500):
         gene = rng.choice(PANEL_BIOMARKERS)
         rec = render_l1_record(
-            gene, profile, biomarkers, common, rng, complexity_level="L2"
+            gene, biomarkers, common, rng, complexity_level="L2"
         )
         assert rec.sentence.strip()
         for name, (start, end) in rec.assertions[0].spans.items():
@@ -369,11 +353,10 @@ def test_l2_equivocal_falls_back_to_formal_vocabulary(
     """No shorthand category exists for equivocal — L2 uses formal equivocal_phrases."""
     formal = set(common.categories["equivocal_phrases"].realizations.values())
     rng = random.Random(5)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen = 0
     for _ in range(1500):
         rec = render_l1_record(
-            "EGFR", profile, biomarkers, common, rng, complexity_level="L2"
+            "EGFR", biomarkers, common, rng, complexity_level="L2"
         )
         if rec.assertions[0].status != "equivocal":
             continue
@@ -389,8 +372,7 @@ def test_render_rejects_unknown_complexity_level(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(RenderError, match="complexity_level"):
         render_l1_record(
-            "EGFR", profile, biomarkers, common, rng, complexity_level="L3"
+            "EGFR", biomarkers, common, rng, complexity_level="L3"
         )

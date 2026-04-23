@@ -24,7 +24,6 @@ import random
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.post_process import (
     OCR_CHAR_SWAPS,
     PDF_HYPHEN_LINEBREAK,
@@ -77,10 +76,9 @@ def test_whitespace_tab_only_at_slot_boundary(
     """Apply tab mode repeatedly to L1 records and check every tab that
     appears is adjacent to a labeled span — never mid-prose."""
     rng = random.Random(1001)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     tabs_seen = 0
     for _ in range(500):
-        rec = render_l1_record("EGFR", profile, biomarkers, common, rng)
+        rec = render_l1_record("EGFR", biomarkers, common, rng)
         original = rec.sentence
         spans = dict(rec.assertions[0].spans)
         new_sentence, _new_spans = _apply_whitespace(
@@ -107,9 +105,8 @@ def test_whitespace_newline_only_at_slot_boundary(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(1003)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(400):
-        rec = render_l1_record("KRAS", profile, biomarkers, common, rng)
+        rec = render_l1_record("KRAS", biomarkers, common, rng)
         original = rec.sentence
         spans = dict(rec.assertions[0].spans)
         new_sentence, _ = _apply_whitespace(
@@ -130,9 +127,8 @@ def test_whitespace_double_space_only_at_slot_boundary(
 ) -> None:
     """double_space insertion must also honor boundary rule."""
     rng = random.Random(1005)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(400):
-        rec = render_l1_record("BRAF", profile, biomarkers, common, rng)
+        rec = render_l1_record("BRAF", biomarkers, common, rng)
         original = rec.sentence
         spans = dict(rec.assertions[0].spans)
         new_sentence, new_spans = _apply_whitespace(
@@ -212,9 +208,8 @@ def test_ocr_never_touches_labeled_chars(
 ) -> None:
     """Across many runs no swap ever lands inside a labeled span."""
     rng = random.Random(1013)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rec = render_l1_record("EGFR", profile, biomarkers, common, rng)
+        rec = render_l1_record("EGFR", biomarkers, common, rng)
         original = rec.sentence
         spans = dict(rec.assertions[0].spans)
         new_sentence = _apply_ocr_corruption(
@@ -301,9 +296,8 @@ def test_bug_3a_rate_is_zero_on_l1_prose_under_tab_mode(
     tab lands in a prose-interior position. This is the sub-phase exit gate.
     """
     rng = random.Random(1021)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(1000):
-        rec = render_l1_record("EGFR", profile, biomarkers, common, rng)
+        rec = render_l1_record("EGFR", biomarkers, common, rng)
         original = rec.sentence
         spans = dict(rec.assertions[0].spans)
         new_sentence, _ = _apply_whitespace(original, spans, "tab", rng)

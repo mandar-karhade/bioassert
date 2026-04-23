@@ -7,10 +7,8 @@ from collections import Counter
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.sampler import (
     maybe_sample_clone,
-    resolve_population,
     sample_biomarker_name_form,
     sample_measurement_value,
     sample_method,
@@ -49,12 +47,12 @@ def test_sample_status_respects_distribution(
     biomarkers: BiomarkerConfig,
 ) -> None:
     egfr = biomarkers.get("EGFR")
-    adeno_dist = egfr.status_distribution_by_population["adenocarcinoma"]
+    dist = egfr.status_distribution
     rng = random.Random(0)
     n = 10000
-    counts = Counter(sample_status(adeno_dist, rng) for _ in range(n))
-    assert abs(counts["positive"] / n - adeno_dist.positive) < 0.02
-    assert abs(counts["negative"] / n - adeno_dist.negative) < 0.02
+    counts = Counter(sample_status(dist, rng) for _ in range(n))
+    assert abs(counts["positive"] / n - dist.positive) < 0.02
+    assert abs(counts["negative"] / n - dist.negative) < 0.02
 
 
 def test_sample_variant_returns_known_variant(
@@ -158,13 +156,3 @@ def test_sample_measurement_value_stays_in_range() -> None:
     for _ in range(500):
         val = sample_measurement_value((0.0, 100.0), rng)
         assert 0.0 <= val <= 100.0
-
-
-def test_resolve_population_returns_population_status(
-    biomarkers: BiomarkerConfig,
-) -> None:
-    egfr = biomarkers.get("EGFR")
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
-    dist = resolve_population(egfr, profile)
-    assert dist.positive >= 0
-    assert dist.negative >= 0
