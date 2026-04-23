@@ -69,10 +69,7 @@ def apply_technical_noise(
         )
 
     if len(record.assertions) != 1:
-        raise PostProcessError(
-            "apply_technical_noise currently only supports single-assertion "
-            f"records; got {len(record.assertions)}"
-        )
+        return _passthrough_post_process(record)
     original_fact = record.assertions[0]
     sentence = record.sentence
     spans = dict(original_fact.spans)
@@ -121,6 +118,29 @@ def apply_technical_noise(
         assertions=(new_fact,),
         frame_template=record.frame_template,
         applied_transforms=applied,
+        complexity_level=record.complexity_level,
+    )
+
+
+def _passthrough_post_process(record: RenderedRecord) -> PostProcessedRecord:
+    """Return a PostProcessedRecord that copies ``record`` unchanged.
+
+    Used for multi-assertion records (L3+) until Sub-phase 3.9 expands the
+    noise system to coordinate span updates across N facts. Downstream
+    consumers see ``applied_transforms`` marked ``"skipped"`` for every
+    category so the schema stays consistent.
+    """
+    skipped = {
+        "hyphenation_gene_names": "skipped",
+        "whitespace": "skipped",
+        "case_variation": "skipped",
+        "punctuation_variation": "skipped",
+    }
+    return PostProcessedRecord(
+        sentence=record.sentence,
+        assertions=record.assertions,
+        frame_template=record.frame_template,
+        applied_transforms=skipped,
         complexity_level=record.complexity_level,
     )
 
