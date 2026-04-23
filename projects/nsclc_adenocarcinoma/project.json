@@ -1,0 +1,13 @@
+{
+  "$schema_version": "1.0",
+  "name": "nsclc_adenocarcinoma",
+  "display_name": "NSCLC — Lung Adenocarcinoma",
+  "description": "Tier-1 biomarker panel (EGFR, KRAS, ALK, ROS1, BRAF, MET, RET, ERBB2, NTRK, PD-L1, TMB) calibrated against adenocarcinoma-weighted prevalence priors from PIONEER, AACR GENIE v13, LCMC, and published meta-analyses.",
+  "schema_type": "biomarker",
+  "configs": {
+    "common": "configs/common_variations.json",
+    "biomarkers": "configs/biomarkers.json"
+  },
+  "references_dir": "references",
+  "outputs_dir": "outputs"
+}

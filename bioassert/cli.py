@@ -1,17 +1,14 @@
-"""Generate the v1 corpus: mixed L1–L7 records from the JSON-driven pipeline.
+"""``bioassert`` command-line entry point.
 
-Deterministic (seeded). Output: ``datasets/v1_phase3.10/corpus.jsonl`` plus a
-``prevalence_report.json`` summarizing observed vs configured status rates
-per biomarker.
+Installed via ``pyproject.toml`` ``[project.scripts]`` as ``bioassert``. After
+``uv pip install -e .`` (or ``pip install -e .``) the command is available
+from anywhere, and a project directory can live outside the source tree::
 
-Phase 3 scope covers the full Tier 1 panel: mutation/fusion/composite
-biomarkers plus the two expression biomarkers (PD-L1, TMB) with
-``negative_forms`` and IHC ``clone_attribution`` rendering. Status
-distributions are flat per biomarker for the cohort described by
-``biomarkers.json`` — to target a different cohort, author a separate
-config and mix outputs externally.
+    bioassert generate --project /path/to/my_project --n 10000 --tag smoke
 
-Re-run with different ``--seed`` to regenerate.
+Each invocation writes into ``<project>/outputs/run_NNN_<tag?>_<UTC>/`` with
+a snapshotted copy of the configs and a ``manifest.json`` recording the CLI
+args, seed, timestamp, package version, and (best-effort) git SHA.
 """
 from __future__ import annotations
 
@@ -19,11 +16,15 @@ import argparse
 import json
 import math
 import random
+import shutil
+import subprocess
+import sys
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Iterator
 
-from bioassert.config import load_configs
 from bioassert.generator.post_process import (
     PostProcessedRecord,
     apply_technical_noise,
@@ -36,13 +37,7 @@ from bioassert.generator.renderer import (
     render_l6_record,
     render_l7_record,
 )
-
-ROOT = Path(__file__).resolve().parents[1]
-COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
-BIOMARKERS_PATH = ROOT / "bioconfigs" / "biomarkers.json"
-# Keep generated corpora separated by sub-phase so prior snapshots survive
-# when we regen for a new sub-phase. Override via --output-dir for ad-hoc runs.
-OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.10"
+from bioassert.project import Project, ProjectError
 
 MUTATION_BIOMARKERS: tuple[str, ...] = (
     "EGFR",
@@ -55,51 +50,24 @@ MUTATION_BIOMARKERS: tuple[str, ...] = (
     "MET",
     "ERBB2",
 )
-
 EXPRESSION_BIOMARKERS: tuple[str, ...] = ("PD-L1", "TMB")
-
 PANEL_BIOMARKERS: tuple[str, ...] = MUTATION_BIOMARKERS + EXPRESSION_BIOMARKERS
 
-# Probability that an L3 record draws from the expression class rather than
-# the mutation class. Expression has only 2 biomarkers so L3 N is always 2;
-# mutation has 9, so N ∈ {2,3,4}. Biased toward mutation to keep variety.
 L3_EXPRESSION_CLASS_PROB = 0.15
+_COMPOUND_LEVELS: frozenset[str] = frozenset({"L3", "L3S", "L4", "L4S", "L5"})
 
 DEFAULT_N = 50_000
 DEFAULT_SEED = 42
 DEFAULT_L2_FRACTION = 0.3
-DEFAULT_L3_FRACTION = 0.0
-DEFAULT_L3S_FRACTION = 0.0
-DEFAULT_L4_FRACTION = 0.0
-DEFAULT_L4S_FRACTION = 0.0
-DEFAULT_L5_FRACTION = 0.0
-DEFAULT_L6_FRACTION = 0.0
-DEFAULT_L7_FRACTION = 0.0
-# Compounding tier split (applies only to L3/L3S/L4/L4S/L5 records). The
-# split is a binary low/high per user feedback 2026-04-23; medium was
-# collapsed into high. Defaults to 0.5/0.5 and must sum to 1.0.
 DEFAULT_COMPOUND_LOW = 0.5
 DEFAULT_COMPOUND_HIGH = 0.5
 
-_COMPOUND_LEVELS: frozenset[str] = frozenset({"L3", "L3S", "L4", "L4S", "L5"})
-
 
 def _sample_tier(rng: random.Random, low: float) -> str:
-    """Sample a compounding tier. Binary low/high split; low = exactly 2
-    genes, high = 3+ (clamped to pool size).
-    """
     return "low" if rng.random() < low else "high"
 
 
-def _compound_pool(
-    tier: str, rng: random.Random
-) -> list[str]:
-    """Pick the biomarker pool for a compound record.
-
-    High tier may mix mutation and expression classes (per user direction
-    "high use almost all extra"); low keeps the pool homogeneous so the
-    surface stays clinically coherent for a 2-gene assertion.
-    """
+def _compound_pool(tier: str, rng: random.Random) -> list[str]:
     if tier == "high":
         return list(PANEL_BIOMARKERS)
     pool_is_expression = rng.random() < L3_EXPRESSION_CLASS_PROB
@@ -107,6 +75,7 @@ def _compound_pool(
 
 
 def _iter_records(
+    project: Project,
     n: int,
     seed: int,
     l2_fraction: float,
@@ -118,9 +87,9 @@ def _iter_records(
     l6_fraction: float,
     l7_fraction: float,
     compound_low: float,
-    compound_high: float,
 ) -> Iterator[tuple[str, PostProcessedRecord]]:
-    common, biomarkers = load_configs(COMMON_PATH, BIOMARKERS_PATH)
+    common = project.common
+    biomarkers = project.biomarkers
     rng = random.Random(seed)
     for _ in range(n):
         roll = rng.random()
@@ -166,8 +135,6 @@ def _iter_records(
             yield rendered.assertions[0].gene, post
             continue
         if roll < l6_bound:
-            # L6 is single-gene regardless of shape; pool is the full panel
-            # so any biomarker can surface with temporal/certainty qualifiers.
             rendered = render_l6_record(
                 list(PANEL_BIOMARKERS), biomarkers, common, rng
             )
@@ -175,8 +142,6 @@ def _iter_records(
             yield rendered.assertions[0].gene, post
             continue
         if roll < l7_bound:
-            # L7 is single-fact multi-sentence regardless of shape; pool is
-            # the full panel so any biomarker can surface in the claim.
             rendered = render_l7_record(
                 list(PANEL_BIOMARKERS), biomarkers, common, rng
             )
@@ -193,10 +158,7 @@ def _iter_records(
         yield gene, post
 
 
-def _record_to_dict(
-    record: PostProcessedRecord,
-    idx: int,
-) -> dict:
+def _record_to_dict(record: PostProcessedRecord, idx: int) -> dict:
     assertions_out: list[dict] = []
     labeled_spans: list[dict] = []
     for fact in record.assertions:
@@ -234,12 +196,6 @@ def _record_to_dict(
 
 
 def _classify_l6_shape(assertions: tuple) -> str:
-    """Derive the L6 structural shape from the qualifier fields on the facts.
-
-    - ``temporal``: 2 facts, both ``temporal`` set, both ``certainty`` None
-    - ``certainty``: 1 fact, ``certainty`` set
-    - ``combined``: 2 facts, both qualifiers set on each fact
-    """
     if len(assertions) == 1:
         return "certainty"
     if any(a.certainty is not None for a in assertions):
@@ -248,13 +204,6 @@ def _classify_l6_shape(assertions: tuple) -> str:
 
 
 def _classify_l7_shape(record) -> str:
-    """Derive the L7 structural shape from ``sentences`` length and the
-    claim's ``sentence_index``.
-
-    - 3 sentences → ``setup_claim_qualifier``
-    - 2 sentences, claim at index 1 → ``setup_claim``
-    - 2 sentences, claim at index 0 → ``claim_anaphora``
-    """
     n = len(record.sentences)
     fact = record.assertions[0]
     if n == 3:
@@ -266,14 +215,7 @@ def _classify_l7_shape(record) -> str:
     return "unknown"
 
 
-def _two_sigma_within(
-    observed_rate: float, configured_rate: float, n: int
-) -> bool:
-    """Return True when observed is within 2σ of configured.
-
-    σ is the binomial standard error for the configured rate. For tiny rates
-    + small n the bar is loose; for 10K records and rates of 0.1+, ~±0.006.
-    """
+def _two_sigma_within(observed_rate: float, configured_rate: float, n: int) -> bool:
     if n == 0:
         return True
     sigma = math.sqrt(configured_rate * (1 - configured_rate) / n)
@@ -282,87 +224,102 @@ def _two_sigma_within(
     return abs(observed_rate - configured_rate) <= 2 * sigma
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--n", type=int, default=DEFAULT_N)
-    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
-    parser.add_argument(
-        "--l2-fraction",
-        type=float,
-        default=DEFAULT_L2_FRACTION,
-        help="Fraction of records to render with L2 shorthand frames",
+def _bioassert_version() -> str:
+    try:
+        return version("bioassert")
+    except PackageNotFoundError:
+        return "0.0.0+unknown"
+
+
+def _git_sha(project_root: Path) -> str | None:
+    """Best-effort ``git rev-parse HEAD`` scoped to the project directory.
+
+    Returns ``None`` if git isn't available, the directory isn't a repo, or
+    the command fails for any reason. Never raises.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.strip()
+    return sha or None
+
+
+def _snapshot_configs(project: Project, run_dir: Path) -> dict[str, str]:
+    """Copy configs + project.json into ``run_dir/snapshot/`` byte-for-byte.
+
+    Returns a dict mapping logical name → relative path (for the manifest).
+    """
+    snapshot_root = run_dir / "snapshot"
+    configs_dst = snapshot_root / "configs"
+    configs_dst.mkdir(parents=True, exist_ok=True)
+    common_dst = configs_dst / project.common_path.name
+    biomarkers_dst = configs_dst / project.biomarkers_path.name
+    shutil.copy2(project.common_path, common_dst)
+    shutil.copy2(project.biomarkers_path, biomarkers_dst)
+    project_json_dst = snapshot_root / "project.json"
+    shutil.copy2(project.project_json_path, project_json_dst)
+    return {
+        "common": str(common_dst.relative_to(run_dir)),
+        "biomarkers": str(biomarkers_dst.relative_to(run_dir)),
+        "project_json": str(project_json_dst.relative_to(run_dir)),
+    }
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="bioassert")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    gen = subparsers.add_parser(
+        "generate",
+        help="Generate a corpus for a project.",
     )
-    parser.add_argument(
-        "--l3-fraction",
-        type=float,
-        default=DEFAULT_L3_FRACTION,
-        help="Fraction of records to render as L3 shared-status prose",
+    gen.add_argument(
+        "--project",
+        type=Path,
+        required=True,
+        help="Path to the project directory (containing project.json).",
     )
-    parser.add_argument(
-        "--l3s-fraction",
-        type=float,
-        default=DEFAULT_L3S_FRACTION,
-        help="Fraction of records to render as L3 shorthand/tabular",
+    gen.add_argument("--n", type=int, default=DEFAULT_N)
+    gen.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    gen.add_argument(
+        "--tag",
+        type=str,
+        default=None,
+        help="Short label for the run folder; must match [A-Za-z0-9._-]+.",
     )
-    parser.add_argument(
-        "--l4-fraction",
-        type=float,
-        default=DEFAULT_L4_FRACTION,
-        help="Fraction of records to render as L4 heterogeneous prose",
+    for flag, default in (
+        ("--l2-fraction", DEFAULT_L2_FRACTION),
+        ("--l3-fraction", 0.0),
+        ("--l3s-fraction", 0.0),
+        ("--l4-fraction", 0.0),
+        ("--l4s-fraction", 0.0),
+        ("--l5-fraction", 0.0),
+        ("--l6-fraction", 0.0),
+        ("--l7-fraction", 0.0),
+    ):
+        gen.add_argument(flag, type=float, default=default)
+    gen.add_argument(
+        "--compound-low", type=float, default=DEFAULT_COMPOUND_LOW,
+        help="Fraction of compound records rendered at the 'low' tier (exactly 2 genes).",
     )
-    parser.add_argument(
-        "--l4s-fraction",
-        type=float,
-        default=DEFAULT_L4S_FRACTION,
-        help="Fraction of records to render as L4 shorthand/tabular",
+    gen.add_argument(
+        "--compound-high", type=float, default=DEFAULT_COMPOUND_HIGH,
+        help="Fraction of compound records at the 'high' tier (3+ genes).",
     )
-    parser.add_argument(
-        "--l5-fraction",
-        type=float,
-        default=DEFAULT_L5_FRACTION,
-        help="Fraction of records to render as L5 negation-scope",
-    )
-    parser.add_argument(
-        "--l6-fraction",
-        type=float,
-        default=DEFAULT_L6_FRACTION,
-        help=(
-            "Fraction of records to render as L6 temporal/certainty "
-            "(single-gene, shape drawn uniformly from temporal/certainty/"
-            "combined)"
-        ),
-    )
-    parser.add_argument(
-        "--l7-fraction",
-        type=float,
-        default=DEFAULT_L7_FRACTION,
-        help=(
-            "Fraction of records to render as L7 multi-sentence "
-            "coreference (shape drawn uniformly from setup_claim / "
-            "claim_anaphora / setup_claim_qualifier)"
-        ),
-    )
-    parser.add_argument(
-        "--compound-low",
-        type=float,
-        default=DEFAULT_COMPOUND_LOW,
-        help=(
-            "Fraction of compound (L3/L3S/L4/L4S/L5) records rendered at the "
-            "'low' compounding tier (< 3 genes, i.e., exactly 2)."
-        ),
-    )
-    parser.add_argument(
-        "--compound-high",
-        type=float,
-        default=DEFAULT_COMPOUND_HIGH,
-        help=(
-            "Fraction of compound records rendered at the 'high' tier "
-            "(3+ genes, 3-8 clamped to pool size; cross-class pool mixing "
-            "allowed). Must sum with --compound-low to 1.0."
-        ),
-    )
-    args = parser.parse_args()
+    return parser
+
+
+def _generate(args: argparse.Namespace) -> int:
     for flag, val in (
         ("--l2-fraction", args.l2_fraction),
         ("--l3-fraction", args.l3_fraction),
@@ -376,83 +333,66 @@ def main() -> None:
         ("--compound-high", args.compound_high),
     ):
         if not 0.0 <= val <= 1.0:
-            parser.error(f"{flag} must be in [0, 1]")
+            print(f"error: {flag} must be in [0, 1] (got {val})", file=sys.stderr)
+            return 2
     total = (
-        args.l2_fraction
-        + args.l3_fraction
-        + args.l3s_fraction
-        + args.l4_fraction
-        + args.l4s_fraction
-        + args.l5_fraction
-        + args.l6_fraction
-        + args.l7_fraction
+        args.l2_fraction + args.l3_fraction + args.l3s_fraction
+        + args.l4_fraction + args.l4s_fraction + args.l5_fraction
+        + args.l6_fraction + args.l7_fraction
     )
     if total > 1.0:
-        parser.error(
-            "--l2-fraction + --l3-fraction + --l3s-fraction + "
-            "--l4-fraction + --l4s-fraction + --l5-fraction + "
-            "--l6-fraction + --l7-fraction must be <= 1.0"
+        print(
+            "error: sum of --l2..l7 fractions must be <= 1.0",
+            file=sys.stderr,
         )
+        return 2
     if abs(args.compound_low + args.compound_high - 1.0) > 1e-6:
-        parser.error(
-            "--compound-low + --compound-high must equal 1.0 "
-            "(binary tier split; medium was removed in 3.7)"
+        print(
+            "error: --compound-low + --compound-high must equal 1.0",
+            file=sys.stderr,
         )
+        return 2
 
-    output_dir: Path = args.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
-    corpus_path = output_dir / "corpus.jsonl"
-    report_path = output_dir / "prevalence_report.json"
+    try:
+        project = Project.load(args.project)
+    except ProjectError as exc:
+        print(f"error loading project: {exc}", file=sys.stderr)
+        return 2
+
+    started_at = datetime.now(timezone.utc)
+    run_dir = project.next_run_dir(tag=args.tag, now=started_at)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    corpus_path = run_dir / "corpus.jsonl"
+    report_path = run_dir / "prevalence_report.json"
+    manifest_path = run_dir / "manifest.json"
+
+    snapshot_paths = _snapshot_configs(project, run_dir)
 
     status_counts: dict[str, Counter] = defaultdict(Counter)
     totals_by_gene: Counter = Counter()
     complexity_counts: Counter = Counter()
-    # Compound-only: tier counts overall and per complexity level.
     compound_tier_counts: Counter = Counter()
     tier_by_level: dict[str, Counter] = defaultdict(Counter)
-    # L6-only: shape counts. Infer shape from the fact qualifiers since the
-    # record doesn't carry an explicit shape label (temporal: 2 facts both
-    # have ``temporal``, ``certainty`` all None; certainty: 1 fact has
-    # ``certainty``; combined: 2 facts, both qualifiers set).
     l6_shape_counts: Counter = Counter()
-    # L7-only: shape counts. Infer shape from ``sentences`` length and the
-    # claim's ``sentence_index`` (the only fact's index).
     l7_shape_counts: Counter = Counter()
-
     sentences_seen: Counter = Counter()
     span_violations = 0
 
     with open(corpus_path, "w", encoding="utf-8") as f:
         for idx, (gene, record) in enumerate(
             _iter_records(
-                args.n,
-                args.seed,
-                args.l2_fraction,
-                args.l3_fraction,
-                args.l3s_fraction,
-                args.l4_fraction,
-                args.l4s_fraction,
-                args.l5_fraction,
-                args.l6_fraction,
-                args.l7_fraction,
+                project, args.n, args.seed,
+                args.l2_fraction, args.l3_fraction, args.l3s_fraction,
+                args.l4_fraction, args.l4s_fraction, args.l5_fraction,
+                args.l6_fraction, args.l7_fraction,
                 args.compound_low,
-                args.compound_high,
             )
         ):
             f.write(json.dumps(_record_to_dict(record, idx)) + "\n")
-
             for fact in record.assertions:
                 for name, (s, e) in fact.spans.items():
                     if record.sentence[s:e] == "":
                         span_violations += 1
-
-            # Prevalence bookkeeping: only L1/L2 records contribute to the
-            # per-gene status counts. L3/L3S draw status once from the first
-            # gene's distribution and apply it to every listed gene, so the
-            # per-gene empirical rate would be misleading. L4/L4S draw
-            # per-gene independently but span multiple genes. L5 forces
-            # negative on all wide-scope facts and positive on the exception,
-            # bypassing sampling entirely.
             if record.complexity_level in ("L1", "L2"):
                 for fact in record.assertions:
                     status_counts[gene][fact.status] += 1
@@ -467,24 +407,22 @@ def main() -> None:
             if record.complexity_level == "L7":
                 l7_shape_counts[_classify_l7_shape(record)] += 1
 
-    common, biomarkers = load_configs(COMMON_PATH, BIOMARKERS_PATH)
-
     per_gene_report: list[dict] = []
     within_2sigma = 0
     total_checks = 0
-    for gene, total in sorted(totals_by_gene.items()):
-        configured = biomarkers.get(gene).status_distribution
+    for gene, total_g in sorted(totals_by_gene.items()):
+        configured = project.biomarkers.get(gene).status_distribution
         counts = status_counts[gene]
         for status_name in ("positive", "negative", "equivocal", "not_tested"):
             observed_count = counts[status_name]
-            observed_rate = observed_count / total
+            observed_rate = observed_count / total_g
             configured_rate = getattr(configured, status_name)
-            in_band = _two_sigma_within(observed_rate, configured_rate, total)
+            in_band = _two_sigma_within(observed_rate, configured_rate, total_g)
             per_gene_report.append(
                 {
                     "gene": gene,
                     "status": status_name,
-                    "n": total,
+                    "n": total_g,
                     "observed_count": observed_count,
                     "observed_rate": round(observed_rate, 4),
                     "configured_rate": round(configured_rate, 4),
@@ -495,7 +433,9 @@ def main() -> None:
             if in_band:
                 within_2sigma += 1
 
-    max_dupe_sentence, max_dupe_count = sentences_seen.most_common(1)[0]
+    max_dupe_sentence, max_dupe_count = (
+        sentences_seen.most_common(1)[0] if sentences_seen else ("", 0)
+    )
     compound_total = sum(compound_tier_counts.values())
 
     def _tier_fraction(tier: str) -> float:
@@ -503,9 +443,6 @@ def main() -> None:
             return 0.0
         return round(compound_tier_counts.get(tier, 0) / compound_total, 4)
 
-    tier_breakdown_by_level: dict[str, dict[str, int]] = {
-        level: dict(counts) for level, counts in sorted(tier_by_level.items())
-    }
     report = {
         "n_records": args.n,
         "seed": args.seed,
@@ -550,7 +487,9 @@ def main() -> None:
         "compound_high_fraction_observed": _tier_fraction("high"),
         "compound_total": compound_total,
         "compound_tier_counts": dict(compound_tier_counts),
-        "compound_tier_by_level": tier_breakdown_by_level,
+        "compound_tier_by_level": {
+            level: dict(counts) for level, counts in sorted(tier_by_level.items())
+        },
         "panel_biomarkers": list(PANEL_BIOMARKERS),
         "within_2sigma_count": within_2sigma,
         "total_checks": total_checks,
@@ -563,18 +502,44 @@ def main() -> None:
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 
-    print(f"wrote {args.n} records to {corpus_path}")
-    print(f"wrote prevalence report to {report_path}")
-    print(
-        f"within-2σ: {within_2sigma}/{total_checks} "
-        f"({100 * within_2sigma / max(total_checks, 1):.1f}%)"
-    )
-    print(f"span violations (empty slice): {span_violations}")
-    print(
-        f"max identical sentence count: {max_dupe_count} "
-        f"({100 * max_dupe_count / args.n:.2f}% of corpus)"
-    )
+    cli_args = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()}
+    cli_args.pop("command", None)
+    manifest = {
+        "run_id": run_dir.name,
+        "project": project.name,
+        "schema_type": project.schema_type,
+        "timestamp_utc": started_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "tag": args.tag,
+        "seed": args.seed,
+        "n_records": args.n,
+        "cli_args": cli_args,
+        "bioassert_version": _bioassert_version(),
+        "git_sha": _git_sha(project.root),
+        "config_snapshot": snapshot_paths,
+    }
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+
+    print(f"project: {project.name} ({project.display_name})")
+    print(f"run dir: {run_dir}")
+    print(f"corpus : {corpus_path} ({args.n} records)")
+    print(f"report : {report_path}")
+    print(f"within-2σ: {within_2sigma}/{total_checks} "
+          f"({100 * within_2sigma / max(total_checks, 1):.1f}%)")
+    print(f"span violations: {span_violations}")
+    print(f"max identical sentence count: {max_dupe_count} "
+          f"({100 * max_dupe_count / max(args.n, 1):.2f}%)")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    if args.command == "generate":
+        return _generate(args)
+    parser.print_help()
+    return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

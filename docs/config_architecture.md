@@ -263,21 +263,34 @@ Weights are **not** meant to be exact. A 0.25 vs 0.30 difference is within calib
 
 ## 6. Multi-Cohort Generation (External)
 
-`biomarkers.json` is single-cohort. To target a different cohort (e.g., squamous NSCLC, colorectal, breast), author a separate `biomarkers.json` with that cohort's status priors. Mix generated corpora externally:
+A `biomarkers.json` is single-cohort. To target a different cohort (squamous NSCLC, colorectal, breast) author a **sibling project directory** with its own configs and status priors:
+
+```
+projects/
+  nsclc_adenocarcinoma/
+    project.json       # schema_type: "biomarker"
+    configs/{biomarkers,common_variations}.json
+  nsclc_squamous/
+    project.json
+    configs/{biomarkers,common_variations}.json
+  crc_colorectal/
+    project.json
+    configs/{biomarkers,common_variations}.json
+```
+
+Each project is generated independently. Mix corpora externally:
 
 ```bash
-# Example: 70% adenocarcinoma, 30% squamous
-python scripts/generate_corpus_v1.py \
-    --config bioconfigs/biomarkers_adenocarcinoma.json --n 7000 --seed 1 \
-    --output-dir /tmp/adeno
-python scripts/generate_corpus_v1.py \
-    --config bioconfigs/biomarkers_squamous.json --n 3000 --seed 2 \
-    --output-dir /tmp/squamous
-cat /tmp/adeno/corpus.jsonl /tmp/squamous/corpus.jsonl > mixed.jsonl
+bioassert generate --project projects/nsclc_adenocarcinoma --n 7000 --seed 1 --tag adeno
+bioassert generate --project projects/nsclc_squamous       --n 3000 --seed 2 --tag squamous
+
+cat projects/nsclc_adenocarcinoma/outputs/run_*_adeno_*/corpus.jsonl \
+    projects/nsclc_squamous/outputs/run_*_squamous_*/corpus.jsonl \
+    > mixed.jsonl
 shuf mixed.jsonl > mixed_shuffled.jsonl
 ```
 
-The mixing ratio is a heuristic choice, not a schema concern.
+The mixing ratio is a heuristic choice, not a schema concern. Each run's `manifest.json` + `snapshot/` preserves the exact configs used, so the mix is reproducible from the run directories alone.
 
 ---
 

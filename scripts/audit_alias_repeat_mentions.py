@@ -1,11 +1,9 @@
-"""Instrument the v1_phase3.10 corpus for same-gene repeat mentions.
+"""Instrument a corpus for same-gene repeat mentions.
 
-Question for Sub-phase 3.11 scoping: do existing L3/L4/L5 frames already
-emit ≥2 mentions of the same canonical gene within one record (possibly
-using different alias surfaces)? If yes, Option B (plumb alias-mixing
-through existing sites) is justified. If no, Option A (add a dedicated
-L5 alias-inconsistency frame family) is the only path to produce the
-phenomenon at all.
+Usage:
+    python scripts/audit_alias_repeat_mentions.py \
+        --project projects/nsclc_adenocarcinoma \
+        --corpus projects/nsclc_adenocarcinoma/outputs/<run>/corpus.jsonl
 
 Metric per record:
 - mentions_per_gene[canonical]: total alias occurrences in the sentence
@@ -17,22 +15,16 @@ Aggregated by complexity_level and record_type.
 """
 from __future__ import annotations
 
+import argparse
 import json
-import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-import sys
-
-CORPUS = Path(sys.argv[1]) if len(sys.argv) > 1 else (
-    ROOT / "datasets" / "v1_phase3.10" / "corpus.jsonl"
-)
-BIOMARKERS = ROOT / "bioconfigs" / "biomarkers.json"
+from bioassert.project import Project
 
 
-def _load_aliases() -> dict[str, list[str]]:
-    cfg = json.loads(BIOMARKERS.read_text())
+def _load_aliases(biomarkers_path: Path) -> dict[str, list[str]]:
+    cfg = json.loads(biomarkers_path.read_text())
     aliases: dict[str, list[str]] = {}
     for key, b in cfg.items():
         if key.startswith(("$", "_")) or not isinstance(b, dict):
@@ -92,7 +84,21 @@ def _count_mentions(
 
 
 def main() -> None:
-    aliases = _load_aliases()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--project", type=Path, required=True,
+        help="Project directory (loads biomarker aliases).",
+    )
+    parser.add_argument(
+        "--corpus", type=Path, required=True,
+        help="Path to a corpus.jsonl file.",
+    )
+    args = parser.parse_args()
+
+    project = Project.load(args.project)
+    aliases = _load_aliases(project.biomarkers_path)
+    corpus_path: Path = args.corpus
+
     by_level: dict[str, Counter] = defaultdict(Counter)
     by_type: dict[str, Counter] = defaultdict(Counter)
 
@@ -100,7 +106,7 @@ def main() -> None:
     repeat_examples: dict[str, list[dict]] = defaultdict(list)
     variance_examples: list[dict] = []
 
-    with CORPUS.open() as f:
+    with corpus_path.open() as f:
         for line in f:
             rec = json.loads(line)
             total_records += 1

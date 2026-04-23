@@ -14,7 +14,7 @@ htmlcov/
 .venv/
 
 # Generated corpora — committed code only, data regenerates from configs
-datasets/
+projects/*/outputs/
 
 # Claude Code workspace state
 .claude/

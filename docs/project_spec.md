@@ -419,12 +419,14 @@ bioassert/
 │   ├── 03_finetune_rebel.py
 │   ├── 04_transfer_to_n2c2.py
 │   └── configs/
-├── bioconfigs/                    # canonical JSON config (replaces Phase 1 YAML ontology)
-│   ├── biomarkers.json
-│   └── common_variations.json
-├── datasets/
-│   ├── v1_phase2a/               # 10K L1 mutation/fusion corpus
-│   └── v1_phase2b/               # 50K mixed L1+L2 corpus (full Tier 1 panel)
+├── projects/                      # one directory per cohort / disease / schema
+│   └── nsclc_adenocarcinoma/
+│       ├── project.json          # metadata + config paths (schema_type: "biomarker")
+│       ├── configs/
+│       │   ├── biomarkers.json
+│       │   └── common_variations.json
+│       ├── references/           # citations, prevalence sources
+│       └── outputs/              # gitignored; versioned run_NNN_<tag?>_<UTC>/ dirs
 ├── docs/
 │   ├── config_architecture.md    # Phase 2 config-driven architecture
 │   ├── architecture.md           # WIP stub
@@ -432,14 +434,17 @@ bioassert/
 │   ├── limitations.md            # WIP stub
 │   └── archived/                 # Phase 1 historical docs
 ├── tests/
+│   ├── test_project.py           # Project.load + next_run_dir
+│   ├── test_cli.py               # bioassert generate smoke + manifest
 │   ├── test_config_loader.py
 │   ├── test_config_validator.py
 │   ├── test_sampler.py
 │   ├── test_renderer.py
 │   ├── test_post_process.py
 │   └── test_phase2a_preservation.py
-└── scripts/
-    └── generate_corpus_v1.py     # mixed L1+L2 corpus generator
+└── bioassert/
+    ├── cli.py                    # `bioassert generate ...` entry point
+    └── project.py                # Project.load(), next_run_dir(tag)
 ```
 
 ---
@@ -556,4 +561,4 @@ The original Phase 1 kickoff deliverable (now completed and superseded) targeted
 6. `scripts/generate_corpus.py` emitting 1,000 L1 assertions + sentences as JSONL
 7. Unit tests validating that generated sentences always contain the labeled spans
 
-Phase 1 validated the architecture end-to-end. The codebase has since moved to the JSON-driven config pipeline described in [config_architecture.md](config_architecture.md) — the YAML ontology, hand-rolled grammar module, and Pydantic schema have been replaced by `bioconfigs/` JSON files, `bioassert/config/schema.py`, and the data-driven renderer in `bioassert/generator/renderer.py`. Current status is summarized at the top of this document.
+Phase 1 validated the architecture end-to-end. The codebase has since moved to the JSON-driven config pipeline described in [config_architecture.md](config_architecture.md) — the YAML ontology, hand-rolled grammar module, and Pydantic schema have been replaced by per-project `projects/<name>/configs/` JSON files, `bioassert/config/schema.py`, and the data-driven renderer in `bioassert/generator/renderer.py`. Current status is summarized at the top of this document.
