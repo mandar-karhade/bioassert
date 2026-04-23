@@ -39,7 +39,9 @@ from bioassert.generator.renderer import render_l1_record, render_l3_record
 ROOT = Path(__file__).resolve().parents[1]
 COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
 BIOMARKERS_PATH = ROOT / "bioconfigs" / "biomarkers.json"
-OUTPUT_DIR = ROOT / "datasets" / "v1_phase2b"
+# Keep generated corpora separated by sub-phase so prior snapshots survive
+# when we regen for a new sub-phase. Override via --output-dir for ad-hoc runs.
+OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.2"
 
 MUTATION_BIOMARKERS: tuple[str, ...] = (
     "EGFR",
