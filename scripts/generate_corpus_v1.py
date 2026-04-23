@@ -40,6 +40,7 @@ from bioassert.generator.renderer import (
     render_l4_record,
     render_l5_record,
     render_l6_record,
+    render_l7_record,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,7 +48,7 @@ COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
 BIOMARKERS_PATH = ROOT / "bioconfigs" / "biomarkers.json"
 # Keep generated corpora separated by sub-phase so prior snapshots survive
 # when we regen for a new sub-phase. Override via --output-dir for ad-hoc runs.
-OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.8"
+OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.9"
 
 MUTATION_BIOMARKERS: tuple[str, ...] = (
     "EGFR",
@@ -79,6 +80,7 @@ DEFAULT_L4_FRACTION = 0.0
 DEFAULT_L4S_FRACTION = 0.0
 DEFAULT_L5_FRACTION = 0.0
 DEFAULT_L6_FRACTION = 0.0
+DEFAULT_L7_FRACTION = 0.0
 # Compounding tier split (applies only to L3/L3S/L4/L4S/L5 records). The
 # split is a binary low/high per user feedback 2026-04-23; medium was
 # collapsed into high. Defaults to 0.5/0.5 and must sum to 1.0.
@@ -120,6 +122,7 @@ def _iter_records(
     l4s_fraction: float,
     l5_fraction: float,
     l6_fraction: float,
+    l7_fraction: float,
     compound_low: float,
     compound_high: float,
 ) -> Iterator[tuple[PatientProfile, str, str, PostProcessedRecord]]:
@@ -134,6 +137,7 @@ def _iter_records(
         l4s_bound = l4_bound + l4s_fraction
         l5_bound = l4s_bound + l5_fraction
         l6_bound = l5_bound + l6_fraction
+        l7_bound = l6_bound + l7_fraction
         if roll < l3s_bound:
             tier = _sample_tier(rng, compound_low)
             pool = _compound_pool(tier, rng)
@@ -193,11 +197,24 @@ def _iter_records(
             )
             yield profile, first_fact.gene, first_matched_key, post
             continue
+        if roll < l7_bound:
+            # L7 is single-fact multi-sentence regardless of shape; pool is
+            # the full panel so any biomarker can surface in the claim.
+            rendered = render_l7_record(
+                list(PANEL_BIOMARKERS), profile, biomarkers, common, rng
+            )
+            post = apply_technical_noise(rendered, common, rng)
+            first_fact = rendered.assertions[0]
+            _, first_matched_key = resolve_status_distribution(
+                biomarkers.get(first_fact.gene), profile
+            )
+            yield profile, first_fact.gene, first_matched_key, post
+            continue
         gene = rng.choice(PANEL_BIOMARKERS)
         _, matched_key = resolve_status_distribution(
             biomarkers.get(gene), profile
         )
-        complexity_level = "L2" if roll < l6_bound + l2_fraction else "L1"
+        complexity_level = "L2" if roll < l7_bound + l2_fraction else "L1"
         rendered = render_l1_record(
             gene, profile, biomarkers, common, rng,
             complexity_level=complexity_level,
@@ -228,6 +245,7 @@ def _record_to_dict(
                 "polarity_scope": fact.polarity_scope,
                 "temporal": fact.temporal,
                 "certainty": fact.certainty,
+                "sentence_index": fact.sentence_index,
                 "frame_template": record.frame_template,
                 "matched_population_key": matched_key,
             }
@@ -242,6 +260,7 @@ def _record_to_dict(
         "complexity_level": record.complexity_level,
         "compounding_tier": record.compounding_tier,
         "sentence": record.sentence,
+        "sentences": list(record.sentences),
         "patient_profile": asdict(profile),
         "assertions": assertions_out,
         "labeled_spans": labeled_spans,
@@ -261,6 +280,25 @@ def _classify_l6_shape(assertions: tuple) -> str:
     if any(a.certainty is not None for a in assertions):
         return "combined"
     return "temporal"
+
+
+def _classify_l7_shape(record) -> str:
+    """Derive the L7 structural shape from ``sentences`` length and the
+    claim's ``sentence_index``.
+
+    - 3 sentences → ``setup_claim_qualifier``
+    - 2 sentences, claim at index 1 → ``setup_claim``
+    - 2 sentences, claim at index 0 → ``claim_anaphora``
+    """
+    n = len(record.sentences)
+    fact = record.assertions[0]
+    if n == 3:
+        return "setup_claim_qualifier"
+    if n == 2 and fact.sentence_index == 1:
+        return "setup_claim"
+    if n == 2 and fact.sentence_index == 0:
+        return "claim_anaphora"
+    return "unknown"
 
 
 def _two_sigma_within(
@@ -331,6 +369,16 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--l7-fraction",
+        type=float,
+        default=DEFAULT_L7_FRACTION,
+        help=(
+            "Fraction of records to render as L7 multi-sentence "
+            "coreference (shape drawn uniformly from setup_claim / "
+            "claim_anaphora / setup_claim_qualifier)"
+        ),
+    )
+    parser.add_argument(
         "--compound-low",
         type=float,
         default=DEFAULT_COMPOUND_LOW,
@@ -358,6 +406,7 @@ def main() -> None:
         ("--l4s-fraction", args.l4s_fraction),
         ("--l5-fraction", args.l5_fraction),
         ("--l6-fraction", args.l6_fraction),
+        ("--l7-fraction", args.l7_fraction),
         ("--compound-low", args.compound_low),
         ("--compound-high", args.compound_high),
     ):
@@ -371,12 +420,13 @@ def main() -> None:
         + args.l4s_fraction
         + args.l5_fraction
         + args.l6_fraction
+        + args.l7_fraction
     )
     if total > 1.0:
         parser.error(
             "--l2-fraction + --l3-fraction + --l3s-fraction + "
             "--l4-fraction + --l4s-fraction + --l5-fraction + "
-            "--l6-fraction must be <= 1.0"
+            "--l6-fraction + --l7-fraction must be <= 1.0"
         )
     if abs(args.compound_low + args.compound_high - 1.0) > 1e-6:
         parser.error(
@@ -400,6 +450,9 @@ def main() -> None:
     # have ``temporal``, ``certainty`` all None; certainty: 1 fact has
     # ``certainty``; combined: 2 facts, both qualifiers set).
     l6_shape_counts: Counter = Counter()
+    # L7-only: shape counts. Infer shape from ``sentences`` length and the
+    # claim's ``sentence_index`` (the only fact's index).
+    l7_shape_counts: Counter = Counter()
 
     sentences_seen: Counter = Counter()
     span_violations = 0
@@ -416,6 +469,7 @@ def main() -> None:
                 args.l4s_fraction,
                 args.l5_fraction,
                 args.l6_fraction,
+                args.l7_fraction,
                 args.compound_low,
                 args.compound_high,
             )
@@ -450,6 +504,8 @@ def main() -> None:
                 tier_by_level[record.complexity_level][record.compounding_tier] += 1
             if record.complexity_level == "L6":
                 l6_shape_counts[_classify_l6_shape(record.assertions)] += 1
+            if record.complexity_level == "L7":
+                l7_shape_counts[_classify_l7_shape(record)] += 1
 
     common, biomarkers = load_configs(COMMON_PATH, BIOMARKERS_PATH)
 
@@ -526,6 +582,11 @@ def main() -> None:
             complexity_counts.get("L6", 0) / max(args.n, 1), 4
         ),
         "l6_shape_counts": dict(l6_shape_counts),
+        "l7_fraction_requested": args.l7_fraction,
+        "l7_fraction_observed": round(
+            complexity_counts.get("L7", 0) / max(args.n, 1), 4
+        ),
+        "l7_shape_counts": dict(l7_shape_counts),
         "complexity_counts": dict(complexity_counts),
         "compound_low_fraction_requested": args.compound_low,
         "compound_low_fraction_observed": _tier_fraction("low"),

@@ -46,6 +46,11 @@ class PostProcessedRecord:
     applied_transforms: dict[str, str]
     complexity_level: str = "L1"
     compounding_tier: str = "low"
+    sentences: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.sentences:
+            object.__setattr__(self, "sentences", (self.sentence,))
 
 
 _ALPHA_ONLY = re.compile(r"^[A-Za-z]+$")
@@ -70,6 +75,8 @@ def apply_technical_noise(
         )
 
     if len(record.assertions) != 1:
+        return _passthrough_post_process(record)
+    if len(record.sentences) > 1:
         return _passthrough_post_process(record)
     original_fact = record.assertions[0]
     sentence = record.sentence
@@ -116,9 +123,11 @@ def apply_technical_noise(
         polarity_scope=original_fact.polarity_scope,
         temporal=original_fact.temporal,
         certainty=original_fact.certainty,
+        sentence_index=original_fact.sentence_index,
     )
     return PostProcessedRecord(
         sentence=sentence,
+        sentences=(sentence,),
         assertions=(new_fact,),
         frame_template=record.frame_template,
         applied_transforms=applied,
@@ -143,6 +152,7 @@ def _passthrough_post_process(record: RenderedRecord) -> PostProcessedRecord:
     }
     return PostProcessedRecord(
         sentence=record.sentence,
+        sentences=record.sentences,
         assertions=record.assertions,
         frame_template=record.frame_template,
         applied_transforms=skipped,

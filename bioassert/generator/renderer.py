@@ -79,6 +79,7 @@ class AssertionFact:
     polarity_scope: str = "direct"
     temporal: Optional[str] = None
     certainty: Optional[str] = None
+    sentence_index: int = 0
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,11 @@ class RenderedRecord:
     (``"low"`` = 2 genes, ``"high"`` = 3-8 genes clamped to pool size).
     L1/L2 single-gene records inherit the default ``"low"`` but the
     tier is only meaningful at L3+.
+
+    L7 records span multiple sentences. ``sentences`` carries the
+    per-sentence tuple and each ``AssertionFact.sentence_index`` points
+    into it. For L1-L6 (single sentence), ``sentences`` defaults to
+    ``(sentence,)``.
     """
 
     sentence: str
@@ -99,6 +105,11 @@ class RenderedRecord:
     frame_template: str
     complexity_level: str = "L1"
     compounding_tier: str = "low"
+    sentences: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.sentences:
+            object.__setattr__(self, "sentences", (self.sentence,))
 
 
 _L1_FRAMES: list[dict] = [
@@ -1870,4 +1881,193 @@ def _l6_combined_frame2(
         ((g1_start, g1_end), (g2_start, g2_end)),
         ((sa_start, sa_end), (sb_start, sb_end)),
         "{gene} was {status_a} {temporal_a} ({certainty_a}); {gene} was {status_b} {temporal_b} ({certainty_b}).",
+    )
+
+
+# === L7 cross-sentence coreference (Sub-phase 3.9) =====================
+
+L7_ANAPHOR_NOUNS: tuple[str, ...] = (
+    "mutation",
+    "variant",
+    "alteration",
+    "finding",
+    "result",
+)
+
+L7_SHAPES: tuple[str, ...] = (
+    "setup_claim",
+    "claim_anaphora",
+    "setup_claim_qualifier",
+)
+
+_L7_SETUP_TEMPLATES: tuple[str, ...] = (
+    "Molecular profiling was performed on the specimen.",
+    "Comprehensive NGS testing was completed for this case.",
+    "The genomic panel report summarizes the following.",
+    "Targeted sequencing analysis has been performed.",
+    "An orthogonal validation was run on the specimen.",
+)
+
+_L7_ANAPHOR_TEMPLATES: tuple[str, ...] = (
+    "The {anaphor} is associated with targeted therapy response.",
+    "This {anaphor} has known clinical implications.",
+    "The {anaphor} was confirmed by orthogonal methods.",
+    "This {anaphor} was reviewed by the molecular tumor board.",
+    "The {anaphor} appears in published treatment guidelines.",
+)
+
+_L7_QUALIFIER_TEMPLATES: tuple[str, ...] = (
+    "This {anaphor} was classified as pathogenic.",
+    "The {anaphor} was reported as clinically actionable.",
+    "The {anaphor} warrants further clinical correlation.",
+    "This {anaphor} is consistent with the reported histology.",
+    "The {anaphor} prompted a tumor board review.",
+)
+
+_L7_CLAIM_TEMPLATES: tuple[str, ...] = (
+    "{gene} was {status}.",
+    "{gene}: {status}.",
+)
+
+_L7_STATUS_EXCLUDE: frozenset[str] = frozenset({"no evidence of"})
+
+
+def _sample_l7_status_surface(
+    status: str, common: CommonConfig, rng: random.Random
+) -> str:
+    """Draw a status surface suitable for L7 claim frames.
+
+    Filters gene-dependent realizations (via ``{gene}`` marker) and the
+    incomplete ``"no evidence of"`` phrase which requires a trailing noun.
+    Remaining distribution is renormalized before sampling.
+    """
+    category_name = _STATUS_CATEGORY[status]
+    category = common.categories.get(category_name)
+    if not isinstance(category, WeightedVariations):
+        raise RenderError(
+            f"common.{category_name} is missing or wrong schema_type"
+        )
+    eligible: dict[str, float] = {}
+    for vid, weight in category.variations.items():
+        surface = category.realizations[vid]
+        if "{gene}" in surface:
+            continue
+        if surface in _L7_STATUS_EXCLUDE:
+            continue
+        eligible[vid] = weight
+    if not eligible:
+        raise RenderError(
+            f"no L7-eligible realizations for status {status!r}"
+        )
+    total = sum(eligible.values())
+    norm = {k: v / total for k, v in eligible.items()}
+    keys = list(norm)
+    weights = [norm[k] for k in keys]
+    vid = rng.choices(keys, weights=weights, k=1)[0]
+    return category.realizations[vid]
+
+
+def _build_l7_claim_sentence(
+    gene_name: str, status_surface: str, rng: random.Random
+) -> tuple[str, tuple[int, int], tuple[int, int]]:
+    """Return (sentence, gene_span_local, status_span_local) for the claim."""
+    template = rng.choice(_L7_CLAIM_TEMPLATES)
+    if template == "{gene} was {status}.":
+        mid = " was "
+    elif template == "{gene}: {status}.":
+        mid = ": "
+    else:
+        raise RenderError(f"unknown L7 claim template: {template!r}")
+    g_start = 0
+    g_end = len(gene_name)
+    s_start = g_end + len(mid)
+    s_end = s_start + len(status_surface)
+    sentence = f"{gene_name}{mid}{status_surface}."
+    return sentence, (g_start, g_end), (s_start, s_end)
+
+
+def _assemble_l7_record(
+    gene: str,
+    status: str,
+    sentences: list[str],
+    claim_idx: int,
+    claim_local_gene: tuple[int, int],
+    claim_local_status: tuple[int, int],
+    frame_template: str,
+) -> RenderedRecord:
+    joined = " ".join(sentences)
+    offset = sum(len(sentences[i]) + 1 for i in range(claim_idx))
+    g_global = (claim_local_gene[0] + offset, claim_local_gene[1] + offset)
+    s_global = (claim_local_status[0] + offset, claim_local_status[1] + offset)
+    fact = AssertionFact(
+        gene=gene,
+        status=status,
+        spans={"gene": g_global, "status": s_global},
+        sentence_index=claim_idx,
+    )
+    return RenderedRecord(
+        sentence=joined,
+        sentences=tuple(sentences),
+        assertions=(fact,),
+        frame_template=frame_template,
+        complexity_level="L7",
+        compounding_tier="low",
+    )
+
+
+def render_l7_record(
+    biomarker_pool: list[str],
+    profile: PatientProfile,
+    biomarkers: BiomarkerConfig,
+    common: CommonConfig,
+    rng: random.Random,
+    shape: Optional[str] = None,
+) -> RenderedRecord:
+    """Render an L7 multi-sentence coreference record.
+
+    Three shapes:
+
+    - ``"setup_claim"`` — generic setup sentence followed by a gene/status
+      claim. Fact ``sentence_index=1``.
+    - ``"claim_anaphora"`` — claim followed by a nominal anaphor sentence
+      ("the mutation is associated with..."). Fact ``sentence_index=0``.
+    - ``"setup_claim_qualifier"`` — setup, claim, qualifier (3 sentences).
+      Fact ``sentence_index=1``.
+    """
+    if shape is None:
+        shape = rng.choice(L7_SHAPES)
+    if shape not in L7_SHAPES:
+        raise RenderError(f"unknown L7 shape: {shape!r}")
+
+    gene = rng.choice(biomarker_pool)
+    status = rng.choice(("positive", "negative"))
+    gene_cfg = biomarkers.get(gene)
+    gene_name_forms = list(gene_cfg.name_forms.realizations.values())
+    gene_name = rng.choice(gene_name_forms)
+    status_surface = _sample_l7_status_surface(status, common, rng)
+
+    claim, g_span, s_span = _build_l7_claim_sentence(
+        gene_name, status_surface, rng
+    )
+
+    if shape == "setup_claim":
+        setup = rng.choice(_L7_SETUP_TEMPLATES)
+        return _assemble_l7_record(
+            gene, status, [setup, claim], 1, g_span, s_span,
+            frame_template="setup. claim.",
+        )
+    if shape == "claim_anaphora":
+        anaphor_noun = rng.choice(L7_ANAPHOR_NOUNS)
+        anaphor = rng.choice(_L7_ANAPHOR_TEMPLATES).format(anaphor=anaphor_noun)
+        return _assemble_l7_record(
+            gene, status, [claim, anaphor], 0, g_span, s_span,
+            frame_template="claim. anaphor.",
+        )
+    # setup_claim_qualifier
+    setup = rng.choice(_L7_SETUP_TEMPLATES)
+    anaphor_noun = rng.choice(L7_ANAPHOR_NOUNS)
+    qualifier = rng.choice(_L7_QUALIFIER_TEMPLATES).format(anaphor=anaphor_noun)
+    return _assemble_l7_record(
+        gene, status, [setup, claim, qualifier], 1, g_span, s_span,
+        frame_template="setup. claim. qualifier.",
     )
