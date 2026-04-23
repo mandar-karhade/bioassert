@@ -15,20 +15,23 @@ from bioassert.generator.post_process import (
     _shift_spans,
     apply_technical_noise,
 )
-from bioassert.generator.renderer import RenderedRecord, render_l1_record
+from bioassert.generator.renderer import AssertionFact, RenderedRecord, render_l1_record
 
 
 def _make_stub_record(sentence: str, spans: dict[str, tuple[int, int]]) -> RenderedRecord:
-    return RenderedRecord(
-        sentence=sentence,
-        spans=spans,
+    fact = AssertionFact(
         gene="EGFR",
+        status="positive",
+        spans=spans,
         variant_id=None,
         negative_form_id=None,
         clone_id=None,
-        status="positive",
         test_method=None,
         measurement_value=None,
+    )
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=(fact,),
         frame_template="",
     )
 
@@ -57,7 +60,7 @@ def test_shift_spans_boundary_rule_is_end_exclusive() -> None:
 
 def test_hyphenation_grows_gene_span() -> None:
     stub = _make_stub_record("EGFR was positive.", {"gene": (0, 4), "status": (9, 17)})
-    new_sentence, new_spans = _apply_hyphenation(stub.sentence, stub.spans, "hyphenated")
+    new_sentence, new_spans = _apply_hyphenation(stub.sentence, stub.assertions[0].spans, "hyphenated")
     assert new_sentence.startswith("EG-FR")
     start, end = new_spans["gene"]
     assert new_sentence[start:end] == "EG-FR"
@@ -69,25 +72,25 @@ def test_hyphenation_skips_non_alpha_gene_surface() -> None:
     stub = _make_stub_record(
         "PD-L1 was positive.", {"gene": (0, 5), "status": (10, 18)}
     )
-    out, spans = _apply_hyphenation(stub.sentence, stub.spans, "hyphenated")
+    out, spans = _apply_hyphenation(stub.sentence, stub.assertions[0].spans, "hyphenated")
     assert out == stub.sentence
-    assert spans == stub.spans
+    assert spans == stub.assertions[0].spans
 
 
 def test_whitespace_tab_is_length_preserving() -> None:
     rng = random.Random(0)
     stub = _make_stub_record("EGFR was positive.", {"gene": (0, 4), "status": (9, 17)})
-    new_sentence, new_spans = _apply_whitespace(stub.sentence, stub.spans, "tab", rng)
+    new_sentence, new_spans = _apply_whitespace(stub.sentence, stub.assertions[0].spans, "tab", rng)
     assert len(new_sentence) == len(stub.sentence)
     assert "\t" in new_sentence or new_sentence == stub.sentence
-    assert new_spans == stub.spans
+    assert new_spans == stub.assertions[0].spans
 
 
 def test_whitespace_double_space_shifts_spans() -> None:
     rng = random.Random(0)
     stub = _make_stub_record("EGFR was positive.", {"gene": (0, 4), "status": (9, 17)})
     new_sentence, new_spans = _apply_whitespace(
-        stub.sentence, stub.spans, "double_space", rng
+        stub.sentence, stub.assertions[0].spans, "double_space", rng
     )
     assert len(new_sentence) == len(stub.sentence) + 1
     gene_start, gene_end = new_spans["gene"]
@@ -104,12 +107,13 @@ def test_apply_technical_noise_end_to_end_preserves_spans(
     for _ in range(500):
         rendered = render_l1_record("EGFR", profile, biomarkers, common, rng)
         post = apply_technical_noise(rendered, common, rng)
-        for name, (start, end) in post.spans.items():
+        for name, (start, end) in post.assertions[0].spans.items():
             assert 0 <= start <= end <= len(post.sentence), (
                 f"span {name} out of bounds: {(start, end)} vs len={len(post.sentence)}"
             )
             substring = post.sentence[start:end]
-            original = rendered.sentence[rendered.spans[name][0]:rendered.spans[name][1]]
+            rendered_spans = rendered.assertions[0].spans
+            original = rendered.sentence[rendered_spans[name][0]:rendered_spans[name][1]]
             # case/ocr transforms allow the substring to differ from original,
             # but the span must still point to non-empty text of a similar length.
             assert substring, f"empty substring for {name} in {post.sentence!r}"
@@ -155,11 +159,11 @@ def test_clone_span_preserved_under_noise(
         rendered = render_l1_record(
             "PD-L1", profile, biomarkers, common, rng, method_attach_prob=0.0
         )
-        if rendered.clone_id is None:
+        if rendered.assertions[0].clone_id is None:
             continue
         post = apply_technical_noise(rendered, common, rng)
-        assert "clone" in post.spans
-        start, end = post.spans["clone"]
+        assert "clone" in post.assertions[0].spans
+        start, end = post.assertions[0].spans["clone"]
         assert 0 <= start < end <= len(post.sentence)
         assert post.sentence[start:end], "empty clone span post-noise"
         checked += 1
@@ -179,6 +183,6 @@ def test_l2_complexity_level_propagates_through_noise(
         assert rendered.complexity_level == "L2"
         post = apply_technical_noise(rendered, common, rng)
         assert post.complexity_level == "L2"
-        for name, (start, end) in post.spans.items():
+        for name, (start, end) in post.assertions[0].spans.items():
             assert 0 <= start < end <= len(post.sentence)
             assert post.sentence[start:end]

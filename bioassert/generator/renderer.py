@@ -45,26 +45,39 @@ _PLACEHOLDER_RE = re.compile(r"\{([^{}]+)\}")
 
 
 @dataclass(frozen=True)
-class RenderedRecord:
-    """One single-assertion record + rendered surface + char spans.
+class AssertionFact:
+    """One biomarker claim extracted from a rendered sentence.
 
-    Exactly one of ``variant_id`` / ``negative_form_id`` is set:
-    ``variant_id`` when the descriptor slot was filled from ``biomarker.variants``
-    (positive), ``negative_form_id`` when filled from ``biomarker.negative_forms``
-    (expression-biomarker negative). ``clone_id`` is set independently when the
-    §8.4 Bernoulli attached an IHC clone. ``complexity_level`` is ``"L1"``
-    (formal prose frames) or ``"L2"`` (shorthand/tabular frames).
+    Carries the structured truth (gene + status + optional variant/method/clone
+    and measurement) plus the character spans that locate every labeled token in
+    the rendering. Multiple facts can share the same status span (L3 shared
+    status) or occupy disjoint regions of the same sentence (L4 heterogeneous).
+    Invariant: ``sentence[s:e] == labeled_substring`` for every ``(s,e)`` in
+    ``spans``.
+    """
+
+    gene: str
+    status: str
+    spans: dict[str, tuple[int, int]]
+    variant_id: Optional[str] = None
+    negative_form_id: Optional[str] = None
+    clone_id: Optional[str] = None
+    test_method: Optional[str] = None
+    measurement_value: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class RenderedRecord:
+    """One rendered sentence + the assertion facts it carries.
+
+    L1/L2 records have exactly one fact; L3+ will carry a tuple of facts. The
+    tuple ordering follows the order in which genes appear in the surface
+    sentence. ``complexity_level`` is ``"L1"`` / ``"L2"`` (Phase 2b); L3+
+    values land in later sub-phases.
     """
 
     sentence: str
-    spans: dict[str, tuple[int, int]]
-    gene: str
-    variant_id: Optional[str]
-    negative_form_id: Optional[str]
-    clone_id: Optional[str]
-    status: str
-    test_method: Optional[str]
-    measurement_value: Optional[float]
+    assertions: tuple[AssertionFact, ...]
     frame_template: str
     complexity_level: str = "L1"
 
@@ -413,16 +426,19 @@ def render_l1_record(
         clone_surface = biomarker.clone_attribution.realizations[clone_id]
         sentence, spans = _attach_clone(sentence, spans, clone_surface)
 
-    return RenderedRecord(
-        sentence=sentence,
-        spans=spans,
+    fact = AssertionFact(
         gene=biomarker_name,
+        status=status,
+        spans=spans,
         variant_id=variant_id,
         negative_form_id=negative_form_id,
         clone_id=clone_id,
-        status=status,
         test_method=method_id,
         measurement_value=measurement_value,
+    )
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=(fact,),
         frame_template=frame["template"],
         complexity_level=complexity_level,
     )

@@ -60,7 +60,7 @@ def test_every_span_resolves_to_non_empty_substring(
 ) -> None:
     records = _emit_records(N_RECORDS, common, biomarkers, seed=2024)
     for _, rec in records:
-        for name, (start, end) in rec.spans.items():
+        for name, (start, end) in rec.assertions[0].spans.items():
             assert 0 <= start < end <= len(rec.sentence), (
                 f"span {name} out of bounds in {rec.sentence!r}: ({start},{end})"
             )
@@ -74,7 +74,7 @@ def test_spans_never_overlap_each_other(
 ) -> None:
     records = _emit_records(N_RECORDS, common, biomarkers, seed=99)
     for _, rec in records:
-        sorted_spans = sorted(rec.spans.items(), key=lambda kv: kv[1])
+        sorted_spans = sorted(rec.assertions[0].spans.items(), key=lambda kv: kv[1])
         for i in range(1, len(sorted_spans)):
             prev_name, (_, prev_end) = sorted_spans[i - 1]
             cur_name, (cur_start, _) = sorted_spans[i]
@@ -96,12 +96,12 @@ def test_gene_surface_is_known_name_form_when_untransformed(
             continue
         if rec.applied_transforms.get("case_variation") != "canonical":
             continue
-        start, end = rec.spans["gene"]
+        start, end = rec.assertions[0].spans["gene"]
         surface = rec.sentence[start:end]
-        entry = biomarkers.get(rec.gene)
+        entry = biomarkers.get(rec.assertions[0].gene)
         known_forms = set(entry.name_forms.realizations.values())
         assert surface in known_forms, (
-            f"{rec.gene}: gene surface {surface!r} not in configured forms"
+            f"{rec.assertions[0].gene}: gene surface {surface!r} not in configured forms"
         )
         checked += 1
     assert checked >= 500, f"only {checked} canonical-canonical records checked"
@@ -133,17 +133,17 @@ def test_status_surface_reflects_status_label(
     for _, rec in records:
         if rec.applied_transforms.get("case_variation") != "canonical":
             continue
-        start, end = rec.spans["status"]
+        start, end = rec.assertions[0].spans["status"]
         surface = rec.sentence[start:end]
-        allowed = vocab_for_status[rec.status]
-        entry = biomarkers.get(rec.gene)
+        allowed = vocab_for_status[rec.assertions[0].status]
+        entry = biomarkers.get(rec.assertions[0].gene)
         known_forms = set(entry.name_forms.realizations.values())
         expanded = set()
         for form in allowed:
             for gene_form in known_forms:
                 expanded.add(form.replace("{gene}", gene_form))
         assert surface in expanded, (
-            f"status {rec.status!r} surface {surface!r} not in vocab; "
+            f"status {rec.assertions[0].status!r} surface {surface!r} not in vocab; "
             f"sentence={rec.sentence!r}"
         )
 
@@ -169,8 +169,8 @@ def test_deterministic_with_same_seed(
     for (p1, r1), (p2, r2) in zip(a, b):
         assert p1 == p2
         assert r1.sentence == r2.sentence
-        assert r1.spans == r2.spans
-        assert r1.status == r2.status
+        assert r1.assertions[0].spans == r2.assertions[0].spans
+        assert r1.assertions[0].status == r2.assertions[0].status
 
 
 def test_applied_transforms_populated_for_every_record(
@@ -202,6 +202,6 @@ def test_canonical_transforms_leave_sentence_identical_to_render(
             for k in post.applied_transforms
         ):
             assert post.sentence == rendered.sentence
-            assert post.spans == rendered.spans
+            assert post.assertions[0].spans == rendered.assertions[0].spans
             matched += 1
     assert matched >= 200, f"only {matched} pure-canonical records seen"
