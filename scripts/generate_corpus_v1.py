@@ -34,14 +34,18 @@ from bioassert.generator.post_process import (
     PostProcessedRecord,
     apply_technical_noise,
 )
-from bioassert.generator.renderer import render_l1_record, render_l3_record
+from bioassert.generator.renderer import (
+    render_l1_record,
+    render_l3_record,
+    render_l4_record,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
 BIOMARKERS_PATH = ROOT / "bioconfigs" / "biomarkers.json"
 # Keep generated corpora separated by sub-phase so prior snapshots survive
 # when we regen for a new sub-phase. Override via --output-dir for ad-hoc runs.
-OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.3"
+OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.4"
 
 MUTATION_BIOMARKERS: tuple[str, ...] = (
     "EGFR",
@@ -69,6 +73,7 @@ DEFAULT_SEED = 42
 DEFAULT_L2_FRACTION = 0.3
 DEFAULT_L3_FRACTION = 0.0
 DEFAULT_L3S_FRACTION = 0.0
+DEFAULT_L4_FRACTION = 0.0
 
 
 def _iter_records(
@@ -77,6 +82,7 @@ def _iter_records(
     l2_fraction: float,
     l3_fraction: float,
     l3s_fraction: float,
+    l4_fraction: float,
 ) -> Iterator[tuple[PatientProfile, str, str, PostProcessedRecord]]:
     common, biomarkers = load_configs(COMMON_PATH, BIOMARKERS_PATH)
     rng = random.Random(seed)
@@ -85,6 +91,7 @@ def _iter_records(
         roll = rng.random()
         l3_prose_bound = l3_fraction
         l3s_bound = l3_fraction + l3s_fraction
+        l4_bound = l3s_bound + l4_fraction
         if roll < l3s_bound:
             pool_is_expression = rng.random() < L3_EXPRESSION_CLASS_PROB
             pool = list(
@@ -102,11 +109,26 @@ def _iter_records(
             )
             yield profile, first_fact.gene, first_matched_key, post
             continue
+        if roll < l4_bound:
+            pool_is_expression = rng.random() < L3_EXPRESSION_CLASS_PROB
+            pool = list(
+                EXPRESSION_BIOMARKERS if pool_is_expression else MUTATION_BIOMARKERS
+            )
+            rendered = render_l4_record(
+                pool, profile, biomarkers, common, rng
+            )
+            post = apply_technical_noise(rendered, common, rng)
+            first_fact = rendered.assertions[0]
+            _, first_matched_key = resolve_status_distribution(
+                biomarkers.get(first_fact.gene), profile
+            )
+            yield profile, first_fact.gene, first_matched_key, post
+            continue
         gene = rng.choice(PANEL_BIOMARKERS)
         _, matched_key = resolve_status_distribution(
             biomarkers.get(gene), profile
         )
-        complexity_level = "L2" if roll < l3s_bound + l2_fraction else "L1"
+        complexity_level = "L2" if roll < l4_bound + l2_fraction else "L1"
         rendered = render_l1_record(
             gene, profile, biomarkers, common, rng,
             complexity_level=complexity_level,
@@ -193,17 +215,31 @@ def main() -> None:
         default=DEFAULT_L3S_FRACTION,
         help="Fraction of records to render as L3 shorthand/tabular",
     )
+    parser.add_argument(
+        "--l4-fraction",
+        type=float,
+        default=DEFAULT_L4_FRACTION,
+        help="Fraction of records to render as L4 heterogeneous prose",
+    )
     args = parser.parse_args()
     for flag, val in (
         ("--l2-fraction", args.l2_fraction),
         ("--l3-fraction", args.l3_fraction),
         ("--l3s-fraction", args.l3s_fraction),
+        ("--l4-fraction", args.l4_fraction),
     ):
         if not 0.0 <= val <= 1.0:
             parser.error(f"{flag} must be in [0, 1]")
-    if args.l2_fraction + args.l3_fraction + args.l3s_fraction > 1.0:
+    total = (
+        args.l2_fraction
+        + args.l3_fraction
+        + args.l3s_fraction
+        + args.l4_fraction
+    )
+    if total > 1.0:
         parser.error(
-            "--l2-fraction + --l3-fraction + --l3s-fraction must be <= 1.0"
+            "--l2-fraction + --l3-fraction + --l3s-fraction + "
+            "--l4-fraction must be <= 1.0"
         )
 
     output_dir: Path = args.output_dir
@@ -226,6 +262,7 @@ def main() -> None:
                 args.l2_fraction,
                 args.l3_fraction,
                 args.l3s_fraction,
+                args.l4_fraction,
             )
         ):
             f.write(
@@ -238,10 +275,13 @@ def main() -> None:
                     if record.sentence[s:e] == "":
                         span_violations += 1
 
-            # Prevalence bookkeeping: only L1/L2 records contribute to the
+            # Prevalence bookkeeping: only L1/L2/L4 records contribute to the
             # per-(gene, population) status counts. L3 / L3S draw status once
             # from the first gene's distribution and apply it to every listed
-            # gene, so the per-gene empirical rate would be misleading.
+            # gene, so the per-gene empirical rate would be misleading. L4
+            # draws per-gene independently so it contributes like L1/L2, but
+            # since the report key uses the first gene's matched population
+            # we skip L4 too (its facts span multiple genes/populations).
             if record.complexity_level in ("L1", "L2"):
                 pair_key = (gene, matched_key)
                 for fact in record.assertions:
@@ -297,6 +337,10 @@ def main() -> None:
         "l3s_fraction_requested": args.l3s_fraction,
         "l3s_fraction_observed": round(
             complexity_counts.get("L3S", 0) / max(args.n, 1), 4
+        ),
+        "l4_fraction_requested": args.l4_fraction,
+        "l4_fraction_observed": round(
+            complexity_counts.get("L4", 0) / max(args.n, 1), 4
         ),
         "complexity_counts": dict(complexity_counts),
         "panel_biomarkers": list(PANEL_BIOMARKERS),
