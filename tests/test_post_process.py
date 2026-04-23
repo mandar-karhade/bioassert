@@ -186,3 +186,31 @@ def test_l2_complexity_level_propagates_through_noise(
         for name, (start, end) in post.assertions[0].spans.items():
             assert 0 <= start < end <= len(post.sentence)
             assert post.sentence[start:end]
+
+
+def test_polarity_scope_propagates_through_single_fact_noise(
+    common: CommonConfig,
+) -> None:
+    """Single-fact post-process must forward polarity_scope from input to
+    output. Regression guard for the panel-wide L5 frame family where the
+    sole labeled fact carries ``polarity_scope='exception'``.
+    """
+    rng = random.Random(23)
+    fact = AssertionFact(
+        gene="KRAS",
+        status="positive",
+        spans={"gene": (50, 54), "status": (30, 38)},
+        polarity_scope="exception",
+    )
+    rec = RenderedRecord(
+        sentence="No biomarker on the panel was positive other than KRAS.",
+        assertions=(fact,),
+        frame_template="No biomarker on the panel was positive other than {ex_gene}.",
+        complexity_level="L5",
+    )
+    for _ in range(50):
+        post = apply_technical_noise(rec, common, rng)
+        assert post.assertions[0].polarity_scope == "exception", (
+            f"expected polarity_scope='exception', got "
+            f"{post.assertions[0].polarity_scope!r}"
+        )
