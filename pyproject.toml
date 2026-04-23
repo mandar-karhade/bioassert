@@ -5,7 +5,7 @@ description = "Synthetic corpus generator for biomarker assertion extraction in 
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "BioAssert contributors" }]
-license = { text = "Apache-2.0" }
+license = { text = "PolyForm-Noncommercial-1.0.0" }
 dependencies = [
     "pydantic>=2.6",
     "pyyaml>=6.0",

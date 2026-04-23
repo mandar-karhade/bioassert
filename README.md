@@ -29,3 +29,7 @@ The corpus lands at `datasets/v1_phase2b/corpus.jsonl` with a `prevalence_report
 ## Core principle
 
 Ground truth is the structured assertion. Surface text is rendered from assertions. Labels are correct by construction.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE) — free for noncommercial use (research, teaching, personal projects). Commercial use requires a separate license.
