@@ -22,6 +22,7 @@ The corpus lands at `datasets/v1_phase2b/corpus.jsonl` with a `prevalence_report
 - [docs/CONFIG_ARCHITECTURE.md](docs/CONFIG_ARCHITECTURE.md) — live config-driven architecture (Phase 2)
 - [docs/CONVERSATION_CONTEXT.md](docs/CONVERSATION_CONTEXT.md) — design rationale and decision log
 - [docs/NSCLC_BIOMARKER_REFERENCE.md](docs/NSCLC_BIOMARKER_REFERENCE.md) — clinical reference for the Tier 1 panel
+- [docs/PHASE3_PLAN.md](docs/PHASE3_PLAN.md) — Phase 3 sub-phase breakdown (L3–L7, noise expansion)
 - [docs/known_issues.md](docs/known_issues.md) — tracked rendering variation bugs (with per-bug rates and deferred-fix notes)
 - [docs/architecture.md](docs/architecture.md), [docs/complexity_levels.md](docs/complexity_levels.md), [docs/limitations.md](docs/limitations.md) — WIP stubs
 - [docs/archived/](docs/archived/) — superseded Phase 1 artifacts (kickoff prompt, old package README)
