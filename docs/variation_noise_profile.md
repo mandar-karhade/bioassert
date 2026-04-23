@@ -43,7 +43,7 @@ Result: {gene} {status}.
 **Assertions:** 1 fact per record. Spans: `{gene, status}` (+ `method`, `clone`, `measurement`, `variant` when slotted).
 
 **Variation sources:**
-- Gene name form — weighted draw from [`biomarkers.json`](../bioconfigs/biomarkers.json) `name_forms.variations` (per-gene, see [§4](#4-per-gene-alias-vocabulary-name_forms)).
+- Gene name form — weighted draw from [`biomarkers.json`](../projects/nsclc_adenocarcinoma/configs/biomarkers.json) `name_forms.variations` (per-gene, see [§4](#4-per-gene-alias-vocabulary-name_forms)).
 - Verb — weighted from `assertion_verbs` (14 entries, [§3.1](#31-vocabulary-categories)).
 - Status surface — weighted from the matching `{positive,negation,equivocal,not_tested}_phrases` (6–12 entries each).
 - Method attachment — Bernoulli per biomarker config (default ~30% for mutation biomarkers).
@@ -191,7 +191,7 @@ Constants: `COMPOUND_LOW_N = 2`, `COMPOUND_HIGH_MIN = 3`, `COMPOUND_HIGH_MAX = 8
 
 ## 3. Layer 3 — shared vocabulary
 
-[`bioconfigs/common_variations.json`](../bioconfigs/common_variations.json) holds the shared surface-variation vocabularies. All are `$schema_type: weighted_variations` — a `{variation_id: weight}` map plus a `{variation_id: realization_string}` map. Weights sum to 1.0 (validated at load time, tolerance 0.001).
+[`projects/nsclc_adenocarcinoma/configs/common_variations.json`](../projects/nsclc_adenocarcinoma/configs/common_variations.json) holds the shared surface-variation vocabularies. All are `$schema_type: weighted_variations` — a `{variation_id: weight}` map plus a `{variation_id: realization_string}` map. Weights sum to 1.0 (validated at load time, tolerance 0.001).
 
 ### 3.1 Vocabulary categories
 
@@ -218,7 +218,7 @@ Status (`positive` / `negative` / `equivocal` / `not_tested`) is **not** drawn f
 
 ## 4. Per-gene alias vocabulary (`name_forms`)
 
-[`bioconfigs/biomarkers.json`](../bioconfigs/biomarkers.json) holds per-gene `name_forms` — the surface-string pool used by L1/L2/L3/... renderers when emitting `{gene}`. Also the swap pool for the `abbreviation_inconsistency` mixed-mode transform.
+[`projects/nsclc_adenocarcinoma/configs/biomarkers.json`](../projects/nsclc_adenocarcinoma/configs/biomarkers.json) holds per-gene `name_forms` — the surface-string pool used by L1/L2/L3/... renderers when emitting `{gene}`. Also the swap pool for the `abbreviation_inconsistency` mixed-mode transform.
 
 Tier 1 panel coverage (11 biomarkers):
 
@@ -246,7 +246,7 @@ Prevalence sampling is a covariate on status selection only. It does **not** dri
 
 ### 5.1 Flat per-biomarker distribution
 
-Each biomarker in [`bioconfigs/biomarkers.json`](../bioconfigs/biomarkers.json) carries a single `status_distribution` field:
+Each biomarker in [`projects/nsclc_adenocarcinoma/configs/biomarkers.json`](../projects/nsclc_adenocarcinoma/configs/biomarkers.json) carries a single `status_distribution` field:
 
 ```json
 "status_distribution": {
@@ -263,19 +263,21 @@ The four probabilities sum to 1.0 (validated at load time, tolerance 0.001). `sa
 
 ### 5.2 Cohort scope and multi-cohort corpora
 
-A single `biomarkers.json` describes **one cohort**. The shipped config targets lung adenocarcinoma, so prevalence values are adenocarcinoma-weighted averages across the PIONEER / GENIE / LCMC source studies.
+A single `biomarkers.json` describes **one cohort**. The shipped config at [`projects/nsclc_adenocarcinoma/configs/biomarkers.json`](../projects/nsclc_adenocarcinoma/configs/biomarkers.json) targets lung adenocarcinoma, so prevalence values are adenocarcinoma-weighted averages across the PIONEER / GENIE / LCMC source studies.
 
-For squamous cohorts, RNA-fusion-driven panels, or pan-tumor panels, author a separate `biomarkers.json` (reusing the same `common_variations.json`) and mix generated corpora externally at the target ratio:
+For squamous cohorts, RNA-fusion-driven panels, or pan-tumor panels, create a sibling project directory (e.g., `projects/nsclc_squamous/`) with its own `configs/biomarkers.json`, then mix generated corpora externally at the target ratio:
 
 ```bash
-python scripts/generate_corpus_v1.py --biomarkers bioconfigs/biomarkers_adeno.json --n 8000 --output adeno.jsonl
-python scripts/generate_corpus_v1.py --biomarkers bioconfigs/biomarkers_squamous.json --n 2000 --output squamous.jsonl
-cat adeno.jsonl squamous.jsonl | shuf > corpus.jsonl
+bioassert generate --project projects/nsclc_adenocarcinoma --n 8000 --seed 1 --tag adeno
+bioassert generate --project projects/nsclc_squamous       --n 2000 --seed 2 --tag squamous
+cat projects/nsclc_adenocarcinoma/outputs/run_*_adeno_*/corpus.jsonl \
+    projects/nsclc_squamous/outputs/run_*_squamous_*/corpus.jsonl \
+    | shuf > corpus.jsonl
 ```
 
 ### 5.3 Source priors
 
-Each distribution is sourced from PIONEER, AACR GENIE v13, LCMC, and published meta-analyses. Citation list lives in [`prevalence_sources.bib`](../bioconfigs/prevalence_sources.bib).
+Each distribution is sourced from PIONEER, AACR GENIE v13, LCMC, and published meta-analyses. Citation list will live in `projects/nsclc_adenocarcinoma/references/prevalence_sources.bib` (future).
 
 Adenocarcinoma-weighted priors (shipped config):
 - EGFR: ~20% positive (cohort-weighted average across Western + East Asian)

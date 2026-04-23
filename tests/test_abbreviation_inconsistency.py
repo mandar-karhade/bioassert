@@ -31,7 +31,7 @@ from bioassert.generator.renderer import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
+COMMON_PATH = ROOT / "projects" / "nsclc_adenocarcinoma" / "configs" / "common_variations.json"
 
 
 def _make_l6_temporal_frame2_stub(

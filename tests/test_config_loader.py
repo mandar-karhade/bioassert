@@ -21,8 +21,9 @@ from bioassert.config.loader import _dispatch_common_category
 from bioassert.config.schema import WEIGHT_TOLERANCE
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
-BIOMARKERS_PATH = ROOT / "bioconfigs" / "biomarkers.json"
+PROJECT_DIR = ROOT / "projects" / "nsclc_adenocarcinoma"
+COMMON_PATH = PROJECT_DIR / "configs" / "common_variations.json"
+BIOMARKERS_PATH = PROJECT_DIR / "configs" / "biomarkers.json"
 
 
 def test_configs_load_without_errors() -> None:

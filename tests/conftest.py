@@ -9,8 +9,9 @@ import pytest
 from bioassert.config import BiomarkerConfig, CommonConfig, load_configs
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
-BIOMARKERS_PATH = ROOT / "bioconfigs" / "biomarkers.json"
+PROJECT_DIR = ROOT / "projects" / "nsclc_adenocarcinoma"
+COMMON_PATH = PROJECT_DIR / "configs" / "common_variations.json"
+BIOMARKERS_PATH = PROJECT_DIR / "configs" / "biomarkers.json"
 
 MUTATION_BIOMARKERS: tuple[str, ...] = (
     "EGFR",

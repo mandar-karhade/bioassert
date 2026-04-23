@@ -11,10 +11,50 @@ Synthetic corpus generator for biomarker assertion extraction in non-small-cell 
 ```bash
 uv sync
 uv run pytest
-PYTHONPATH=. uv run python scripts/generate_corpus_v1.py --n 50000 --l2-fraction 0.3
+uv pip install -e .
+bioassert generate \
+  --project projects/nsclc_adenocarcinoma \
+  --n 50000 \
+  --seed 42 \
+  --l2-fraction 0.3 \
+  --tag smoke
 ```
 
-The corpus lands at `datasets/v1_phase2b/corpus.jsonl` with a `prevalence_report.json` summarizing observed vs configured status rates.
+Each run lands in its own versioned folder under the project's `outputs/`:
+
+```
+projects/nsclc_adenocarcinoma/outputs/
+  run_001_smoke_20260423-230756/
+    corpus.jsonl               # generated records
+    prevalence_report.json     # observed vs. configured status rates
+    manifest.json              # CLI args, seed, UTC timestamp, git SHA, version
+    snapshot/                  # byte-identical copy of configs + project.json
+      configs/{common_variations,biomarkers}.json
+      project.json
+```
+
+Every invocation is reproducible from the snapshot alone — the configs that produced a corpus travel with it.
+
+## Project layout
+
+A **project** is a self-contained directory describing one corpus-generation
+target (configs, references, output history). The shipped example targets
+NSCLC lung adenocarcinoma; additional cohorts or future diseases live as
+sibling directories under `projects/`:
+
+```
+projects/
+  nsclc_adenocarcinoma/
+    project.json          # metadata + config paths (schema_type: "biomarker")
+    configs/
+      common_variations.json
+      biomarkers.json
+    references/           # citations, prevalence sources
+    outputs/              # gitignored; versioned run dirs
+    README.md
+```
+
+See [projects/nsclc_adenocarcinoma/README.md](projects/nsclc_adenocarcinoma/README.md) for the shipped cohort panel.
 
 ## Documents
 
