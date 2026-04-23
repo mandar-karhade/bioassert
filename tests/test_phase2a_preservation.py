@@ -50,7 +50,7 @@ def _emit_records(
         profile = sample_patient_profile(f"p{i:05d}", rng)
         gene = rng.choice(PANEL_BIOMARKERS)
         rendered = render_l1_record(gene, profile, biomarkers, common, rng)
-        post = apply_technical_noise(rendered, common, rng)
+        post = apply_technical_noise(rendered, common, biomarkers, rng)
         emitted.append((profile, post))
     return emitted
 
@@ -184,6 +184,7 @@ def test_applied_transforms_populated_for_every_record(
         "punctuation_variation",
         "ocr_corruption",
         "pdf_artifact",
+        "abbreviation_inconsistency",
     }
     for _, rec in records:
         assert set(rec.applied_transforms.keys()) == required
@@ -197,7 +198,7 @@ def test_canonical_transforms_leave_sentence_identical_to_render(
     matched = 0
     for i in range(2000):
         rendered = render_l1_record("EGFR", profile, biomarkers, common, rng)
-        post = apply_technical_noise(rendered, common, rng)
+        post = apply_technical_noise(rendered, common, biomarkers, rng)
         if all(
             post.applied_transforms[k]
             in ("canonical", "single_space")

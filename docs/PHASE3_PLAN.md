@@ -166,17 +166,24 @@ Parallel to 3.3 — shorthand form of heterogeneous multi-gene. `EGFR +, ALK -, 
 
 ---
 
-## Sub-phase 3.11 — Layer 5 abbreviation inconsistency (deferred)
+## Sub-phase 3.11 — Layer 5 abbreviation inconsistency
 
-**Why:** Abbreviation inconsistency within a single document (e.g., mixing `HER2`, `ERBB2`, and `HER-2`; or `PD-L1` vs `PDL1` vs `PD L1`) is a common real-world noise pattern. Deferred out of Sub-phase 3.10 to keep that scope focused on Bug 3a + typographic artifacts.
+**Why:** Abbreviation inconsistency within a single record (e.g., `ERBB2` in mention #1 and `HER2` or `HER-2` in mention #2 of the same gene) is a common real-world noise pattern. Layer 5 noise transformation — orthogonal to Layer 4 complexity tiers. Applies automatically on any rendered record with ≥2 labeled mentions of the same canonical gene.
 
-**Scope (not yet implemented):**
-- Per-record alias pool sampling: when a gene has declared aliases in `biomarkers.json`, mix surface forms across multiple mentions within compound (L3+) records.
-- Case-variation within alias (e.g., `EGFR` → `egfr`, `Egfr`) that does not reuse `case_variation` (which applies uniformly to the whole sentence).
+**Empirical basis (10K compound-heavy audit of v1_phase3.10 renderer):** L3/L3S/L4/L4S/L5/L7 produce 0% repeat gene mentions by design (list distinct genes or use pronoun anaphora). L6 temporal_frame2 (`{gene} was X at T1; {gene} was Y at T2`) produces same-gene repeat at 28.26% of L6 records, currently always with identical surface. This is the sole existing site for the transformation today; future Layer 4 frames that produce repeats will be covered automatically.
 
-**Exit gate (when scheduled):** Every compound record that contains ≥2 mentions of the same gene uses at least 2 different surfaces with probability ≥ configured threshold; alias-variance logged in the prevalence report.
+**Scope:**
+- Add `abbreviation_inconsistency` sub-category to `common_variations.json` under `technical_noise` with modes `canonical` / `mixed` and a tunable distribution.
+- Add `_apply_abbreviation_inconsistency` in `bioassert/generator/post_process.py`:
+  1. Group labeled gene spans by canonical gene name across all assertions.
+  2. For any gene with ≥2 mentions, re-render mention #2+ by drawing a new surface from `biomarkers.get(gene).name_forms.variations` weighted distribution, excluding mention #1's surface.
+  3. Splice the new surface into the sentence and shift downstream spans via existing `_shift_spans`.
+- Wire into `apply_technical_noise` after OCR/PDF (order: whitespace → case → hyphenation → punctuation → OCR → PDF → **abbreviation_inconsistency**).
+- No Layer 4 renderer changes. No new complexity levels.
 
-**Risk:** medium — alias resolution needs to preserve labeled-span correctness after surface swap.
+**Exit gate:** Of records with `abbreviation_inconsistency == mixed` AND ≥2 labeled mentions of the same gene, ≥80% use 2 distinct surfaces (some draws will coincidentally pick the same surface when the weighted distribution is concentrated). Span-integrity violations 0/50,000. `applied_transforms` reports `abbreviation_inconsistency` key on every post-processed record.
+
+**Risk:** low — purely post-process; surface swap is a substring replace with span shift, identical pattern to hyphenation.
 
 ---
 

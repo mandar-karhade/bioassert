@@ -106,7 +106,7 @@ def test_apply_technical_noise_end_to_end_preserves_spans(
     profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(500):
         rendered = render_l1_record("EGFR", profile, biomarkers, common, rng)
-        post = apply_technical_noise(rendered, common, rng)
+        post = apply_technical_noise(rendered, common, biomarkers, rng)
         for name, (start, end) in post.assertions[0].spans.items():
             assert 0 <= start <= end <= len(post.sentence), (
                 f"span {name} out of bounds: {(start, end)} vs len={len(post.sentence)}"
@@ -125,7 +125,7 @@ def test_post_processed_record_reports_applied_transforms(
     rng = random.Random(0)
     profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     rendered = render_l1_record("EGFR", profile, biomarkers, common, rng)
-    post = apply_technical_noise(rendered, common, rng)
+    post = apply_technical_noise(rendered, common, biomarkers, rng)
     assert isinstance(post, PostProcessedRecord)
     expected = {
         "whitespace",
@@ -134,18 +134,21 @@ def test_post_processed_record_reports_applied_transforms(
         "punctuation_variation",
         "ocr_corruption",
         "pdf_artifact",
+        "abbreviation_inconsistency",
     }
     assert set(post.applied_transforms.keys()) == expected
 
 
-def test_missing_technical_noise_block_raises() -> None:
+def test_missing_technical_noise_block_raises(
+    biomarkers: BiomarkerConfig,
+) -> None:
     from bioassert.config.loader import CommonConfig
 
     empty = CommonConfig(schema_version="1.0", categories={})
     rng = random.Random(0)
     stub = _make_stub_record("EGFR was positive.", {"gene": (0, 4), "status": (9, 17)})
     with pytest.raises(KeyError):
-        apply_technical_noise(stub, empty, rng)
+        apply_technical_noise(stub, empty, biomarkers, rng)
 
 
 def test_clone_span_preserved_under_noise(
@@ -163,7 +166,7 @@ def test_clone_span_preserved_under_noise(
         )
         if rendered.assertions[0].clone_id is None:
             continue
-        post = apply_technical_noise(rendered, common, rng)
+        post = apply_technical_noise(rendered, common, biomarkers, rng)
         assert "clone" in post.assertions[0].spans
         start, end = post.assertions[0].spans["clone"]
         assert 0 <= start < end <= len(post.sentence)
@@ -183,7 +186,7 @@ def test_l2_complexity_level_propagates_through_noise(
             "EGFR", profile, biomarkers, common, rng, complexity_level="L2"
         )
         assert rendered.complexity_level == "L2"
-        post = apply_technical_noise(rendered, common, rng)
+        post = apply_technical_noise(rendered, common, biomarkers, rng)
         assert post.complexity_level == "L2"
         for name, (start, end) in post.assertions[0].spans.items():
             assert 0 <= start < end <= len(post.sentence)
@@ -192,6 +195,7 @@ def test_l2_complexity_level_propagates_through_noise(
 
 def test_polarity_scope_propagates_through_single_fact_noise(
     common: CommonConfig,
+    biomarkers: BiomarkerConfig,
 ) -> None:
     """Single-fact post-process must forward polarity_scope from input to
     output. Regression guard for the panel-wide L5 frame family where the
@@ -211,7 +215,7 @@ def test_polarity_scope_propagates_through_single_fact_noise(
         complexity_level="L5",
     )
     for _ in range(50):
-        post = apply_technical_noise(rec, common, rng)
+        post = apply_technical_noise(rec, common, biomarkers, rng)
         assert post.assertions[0].polarity_scope == "exception", (
             f"expected polarity_scope='exception', got "
             f"{post.assertions[0].polarity_scope!r}"
