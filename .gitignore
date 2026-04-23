@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# uv / venv — note: uv.lock IS committed on purpose (reproducible installs)
+.venv/
+
+# Generated corpora — committed code only, data regenerates from configs
+datasets/
+
+# Claude Code workspace state
+.claude/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Notebooks
+.ipynb_checkpoints/

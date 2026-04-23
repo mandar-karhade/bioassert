@@ -1,0 +1,1696 @@
+{
+  "$schema_version": "1.1",
+  "description": "Per-biomarker surface variations for the NCCN v1.2026 Tier 1 NSCLC biomarker panel. Weights are probabilities (floats summing to 1.0 per distribution, validated at load time).",
+  "_changelog": [
+    "v1.1: Normalized population keys across all biomarkers using composable multi-axis schema with documented cascade.",
+    "v1.1: Added adenocarcinoma and squamous as required terminal fallback keys for every biomarker.",
+    "v1.1: Unified variant prevalence field to prevalence_within_biomarker (dropped _given_positive suffix).",
+    "v1.1: Extracted negative renderings for expression biomarkers (PD-L1, TMB) into separate negative_forms block; removed degenerate 0.0-prevalence variants.",
+    "v1.1: Extracted PD-L1 IHC clones into independent clone_attribution block (not a variant).",
+    "v1.1: Added render_constraints.require_biomarker_name_forms to fusion unspecified_fusion variants to couple name-form sampling.",
+    {
+      "date": "2026-04-23",
+      "change": "Strip gene-name prefix from variant realizations",
+      "reason": "Frame {gene} {variant} was producing duplicated gene names (e.g. \"KRAS KRAS G12C\"). Bug 3b affected ~2% of generated records.",
+      "count": 44
+    },
+    {
+      "date": "2026-04-23",
+      "change": "Extend gene-prefix strip to hyphen-boundary and negative_forms",
+      "reason": "Initial strip missed \"TMB-high\"/\"TMB-low\" (hyphen boundary) and TMB negative_forms (\"TMB {value} mut/Mb\"). Bug 3b remaining rate 1.71% → expected near zero.",
+      "count": 5
+    }
+  ],
+  "_schema_template": {
+    "description": "Reference structure — every biomarker entry follows this shape",
+    "canonical_name": "string — full formal name",
+    "alteration_type": "mutation | fusion | amplification | expression | composite",
+    "name_forms": {
+      "description": "Surface variations of how the biomarker name appears",
+      "variations": "dict of form_id -> probability (sums to 1.0)",
+      "realizations": "dict of form_id -> actual string rendered"
+    },
+    "variants": {
+      "description": "Sub-variants (e.g., L858R within EGFR). prevalence_within_biomarker is conditional probability given the biomarker has a meaningful result to report. For mutations this means positive; for expression biomarkers this means any non-negative meaningful result. Sums to 1.0 across variants.",
+      "<variant_id>": {
+        "actionable": "bool",
+        "prevalence_within_biomarker": "float",
+        "category": "string label for grouping similar variants",
+        "notes": "optional clinical context",
+        "name_forms": "same structure as biomarker-level name_forms",
+        "measurement_range": "[min, max] — only for expression biomarkers with {value} placeholders",
+        "render_constraints": {
+          "require_biomarker_name_forms": "optional list — if present, biomarker-level name_form sampling is restricted to this subset (weights renormalized within subset)"
+        }
+      }
+    },
+    "negative_forms": {
+      "description": "ONLY for expression biomarkers (PD-L1, TMB). Surface variations for rendering negative results. Rendered when status=negative instead of sampling from variants.",
+      "variations": "dict",
+      "realizations": "dict"
+    },
+    "clone_attribution": {
+      "description": "ONLY for IHC-based biomarkers (PD-L1). Independent sampling dimension for antibody clone attribution. attachment_probability controls Bernoulli roll for whether to attach; variations/realizations are the clone options.",
+      "attachment_probability": "float [0,1]",
+      "variations": "dict",
+      "realizations": "dict"
+    },
+    "status_distribution_by_population": {
+      "description": "Prior probability of each status outcome, per simulated patient subpopulation. Keys follow composable multi-axis schema (see CONFIG_ARCHITECTURE.md Section 2.3). MUST include 'adenocarcinoma' and 'squamous' as terminal fallbacks.",
+      "<population_key>": {
+        "positive": "float",
+        "negative": "float",
+        "equivocal": "float",
+        "not_tested": "float"
+      }
+    },
+    "preferred_methods": {
+      "description": "Biomarker-specific weights for test methods. Keys MUST be a subset of common.test_methods.variations. Realizations are looked up in common.test_methods.realizations at render time (no local realizations dict).",
+      "variations": "dict"
+    }
+  },
+  "EGFR": {
+    "canonical_name": "Epidermal Growth Factor Receptor",
+    "alteration_type": "mutation",
+    "gene_location": "7p11.2",
+    "name_forms": {
+      "variations": {
+        "EGFR": 0.72,
+        "EGFR_mutation": 0.12,
+        "EGFR_full": 0.04,
+        "EGF-R": 0.03,
+        "HER1": 0.02,
+        "ERBB1": 0.02,
+        "EGFR_gene": 0.03,
+        "egfr_lowercase": 0.02
+      },
+      "realizations": {
+        "EGFR": "EGFR",
+        "EGFR_mutation": "EGFR mutation",
+        "EGFR_full": "Epidermal Growth Factor Receptor",
+        "EGF-R": "EGF-R",
+        "HER1": "HER1",
+        "ERBB1": "ERBB1",
+        "EGFR_gene": "EGFR gene",
+        "egfr_lowercase": "egfr"
+      }
+    },
+    "variants": {
+      "exon_19_deletion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.46,
+        "category": "classical_activating",
+        "name_forms": {
+          "variations": {
+            "exon_19_deletion": 0.22,
+            "ex19del": 0.2,
+            "exon_19_del": 0.15,
+            "E19del": 0.1,
+            "del19": 0.08,
+            "E746_A750del": 0.08,
+            "exon_19_deletion_full": 0.07,
+            "L747_P753delinsS": 0.03,
+            "E19_deletion": 0.03,
+            "exon_19": 0.04
+          },
+          "realizations": {
+            "exon_19_deletion": "exon 19 deletion",
+            "ex19del": "ex19del",
+            "exon_19_del": "exon 19 del",
+            "E19del": "E19del",
+            "del19": "del19",
+            "E746_A750del": "E746_A750del",
+            "exon_19_deletion_full": "exon 19 deletion (E746_A750del)",
+            "L747_P753delinsS": "L747_P753delinsS",
+            "E19_deletion": "E19 deletion",
+            "exon_19": "exon 19"
+          }
+        }
+      },
+      "L858R": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.38,
+        "category": "classical_activating",
+        "name_forms": {
+          "variations": {
+            "L858R": 0.55,
+            "exon_21_L858R": 0.18,
+            "L858R_mutation": 0.1,
+            "p.L858R": 0.05,
+            "p.Leu858Arg": 0.03,
+            "c.2573T_G": 0.02,
+            "exon_21_point": 0.03,
+            "Leu858Arg": 0.02,
+            "exon_21_L858R_mutation": 0.02
+          },
+          "realizations": {
+            "L858R": "L858R",
+            "exon_21_L858R": "exon 21 L858R",
+            "L858R_mutation": "L858R mutation",
+            "p.L858R": "p.L858R",
+            "p.Leu858Arg": "p.Leu858Arg",
+            "c.2573T_G": "c.2573T>G",
+            "exon_21_point": "exon 21 point mutation",
+            "Leu858Arg": "Leu858Arg",
+            "exon_21_L858R_mutation": "exon 21 L858R mutation"
+          }
+        }
+      },
+      "exon_20_insertion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.08,
+        "category": "exon_20_insertion",
+        "notes": "Heterogeneous — 60+ unique variants; many not detectable by PCR",
+        "name_forms": {
+          "variations": {
+            "exon_20_insertion": 0.3,
+            "ex20ins": 0.2,
+            "exon_20_ins": 0.12,
+            "E20ins": 0.08,
+            "exon_20_insertion_generic": 0.1,
+            "V769_D770insASV": 0.06,
+            "A767_V769dup": 0.05,
+            "S768_D770dup": 0.04,
+            "N771_H773dup": 0.03,
+            "exon_20": 0.02
+          },
+          "realizations": {
+            "exon_20_insertion": "exon 20 insertion",
+            "ex20ins": "ex20ins",
+            "exon_20_ins": "exon 20 ins",
+            "E20ins": "E20ins",
+            "exon_20_insertion_generic": "exon 20 insertion mutation",
+            "V769_D770insASV": "V769_D770insASV",
+            "A767_V769dup": "A767_V769dup",
+            "S768_D770dup": "S768_D770dup",
+            "N771_H773dup": "N771_H773dup",
+            "exon_20": "exon 20"
+          }
+        }
+      },
+      "G719X": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.03,
+        "category": "uncommon",
+        "name_forms": {
+          "variations": {
+            "G719X": 0.35,
+            "G719A": 0.2,
+            "G719C": 0.15,
+            "G719S": 0.15,
+            "G719": 0.1,
+            "exon_18_G719": 0.05
+          },
+          "realizations": {
+            "G719X": "G719X",
+            "G719A": "G719A",
+            "G719C": "G719C",
+            "G719S": "G719S",
+            "G719": "G719",
+            "exon_18_G719": "exon 18 G719"
+          }
+        }
+      },
+      "L861Q": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.02,
+        "category": "uncommon",
+        "name_forms": {
+          "variations": {
+            "L861Q": 0.6,
+            "L861Q_mutation": 0.25,
+            "exon_21_L861Q": 0.15
+          },
+          "realizations": {
+            "L861Q": "L861Q",
+            "L861Q_mutation": "L861Q mutation",
+            "exon_21_L861Q": "exon 21 L861Q"
+          }
+        }
+      },
+      "S768I": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.02,
+        "category": "uncommon",
+        "name_forms": {
+          "variations": {
+            "S768I": 0.65,
+            "S768I_mutation": 0.25,
+            "exon_20_S768I": 0.1
+          },
+          "realizations": {
+            "S768I": "S768I",
+            "S768I_mutation": "S768I mutation",
+            "exon_20_S768I": "exon 20 S768I"
+          }
+        }
+      },
+      "T790M": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.01,
+        "category": "resistance",
+        "notes": "Resistance mutation; rarely primary; common post 1st/2nd gen TKI",
+        "name_forms": {
+          "variations": {
+            "T790M": 0.6,
+            "T790M_mutation": 0.2,
+            "exon_20_T790M": 0.15,
+            "Thr790Met": 0.05
+          },
+          "realizations": {
+            "T790M": "T790M",
+            "T790M_mutation": "T790M resistance mutation",
+            "exon_20_T790M": "exon 20 T790M",
+            "Thr790Met": "Thr790Met"
+          }
+        }
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma_western_nonsmoker_female": {
+        "positive": 0.4,
+        "negative": 0.58,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "adenocarcinoma_western_smoker": {
+        "positive": 0.08,
+        "negative": 0.9,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "adenocarcinoma_east_asian_nonsmoker": {
+        "positive": 0.5,
+        "negative": 0.48,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "adenocarcinoma_east_asian_smoker": {
+        "positive": 0.3,
+        "negative": 0.68,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "adenocarcinoma": {
+        "positive": 0.2,
+        "negative": 0.78,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "squamous": {
+        "positive": 0.03,
+        "negative": 0.95,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.45,
+        "PCR": 0.2,
+        "liquid_biopsy": 0.1,
+        "ctDNA": 0.08,
+        "unspecified": 0.15,
+        "Sanger": 0.02
+      }
+    }
+  },
+  "KRAS": {
+    "canonical_name": "Kirsten Rat Sarcoma Viral Oncogene Homolog",
+    "alteration_type": "mutation",
+    "gene_location": "12p12.1",
+    "name_forms": {
+      "variations": {
+        "KRAS": 0.74,
+        "KRAS_mutation": 0.15,
+        "K-RAS": 0.04,
+        "KRAS_gene": 0.03,
+        "K-ras": 0.02,
+        "kras_lowercase": 0.02
+      },
+      "realizations": {
+        "KRAS": "KRAS",
+        "KRAS_mutation": "KRAS mutation",
+        "K-RAS": "K-RAS",
+        "KRAS_gene": "KRAS gene",
+        "K-ras": "K-ras",
+        "kras_lowercase": "kras"
+      }
+    },
+    "variants": {
+      "G12C": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.4,
+        "category": "actionable_g12",
+        "notes": "Only FDA-approved targetable KRAS variant as of 2026 (sotorasib, adagrasib)",
+        "name_forms": {
+          "variations": {
+            "G12C": 0.55,
+            "KRAS_G12C": 0.2,
+            "G12C_mutation": 0.12,
+            "p.G12C": 0.05,
+            "c.34G_T": 0.03,
+            "G12C_positive": 0.03,
+            "codon_12_G12C": 0.02
+          },
+          "realizations": {
+            "G12C": "G12C",
+            "KRAS_G12C": "G12C",
+            "G12C_mutation": "G12C mutation",
+            "p.G12C": "p.G12C",
+            "c.34G_T": "c.34G>T",
+            "G12C_positive": "G12C positive",
+            "codon_12_G12C": "codon 12 G12C"
+          }
+        }
+      },
+      "G12V": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.2,
+        "category": "nonactionable_g12",
+        "name_forms": {
+          "variations": {
+            "G12V": 0.7,
+            "G12V_mutation": 0.15,
+            "p.G12V": 0.08,
+            "codon_12_G12V": 0.04,
+            "KRAS_G12V": 0.03
+          },
+          "realizations": {
+            "G12V": "G12V",
+            "G12V_mutation": "G12V mutation",
+            "p.G12V": "p.G12V",
+            "codon_12_G12V": "codon 12 G12V",
+            "KRAS_G12V": "G12V"
+          }
+        }
+      },
+      "G12D": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.18,
+        "category": "nonactionable_g12",
+        "notes": "MRTX1133 in development as of 2026",
+        "name_forms": {
+          "variations": {
+            "G12D": 0.7,
+            "G12D_mutation": 0.15,
+            "p.G12D": 0.08,
+            "codon_12_G12D": 0.04,
+            "KRAS_G12D": 0.03
+          },
+          "realizations": {
+            "G12D": "G12D",
+            "G12D_mutation": "G12D mutation",
+            "p.G12D": "p.G12D",
+            "codon_12_G12D": "codon 12 G12D",
+            "KRAS_G12D": "G12D"
+          }
+        }
+      },
+      "G12A": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.07,
+        "name_forms": {
+          "variations": {
+            "G12A": 0.75,
+            "G12A_mutation": 0.15,
+            "p.G12A": 0.1
+          },
+          "realizations": {
+            "G12A": "G12A",
+            "G12A_mutation": "G12A mutation",
+            "p.G12A": "p.G12A"
+          }
+        }
+      },
+      "G12R": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.03,
+        "name_forms": {
+          "variations": {
+            "G12R": 0.8,
+            "G12R_mutation": 0.2
+          },
+          "realizations": {
+            "G12R": "G12R",
+            "G12R_mutation": "G12R mutation"
+          }
+        }
+      },
+      "G13C": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.06,
+        "category": "codon_13",
+        "name_forms": {
+          "variations": {
+            "G13C": 0.7,
+            "G13C_mutation": 0.2,
+            "codon_13_G13C": 0.1
+          },
+          "realizations": {
+            "G13C": "G13C",
+            "G13C_mutation": "G13C mutation",
+            "codon_13_G13C": "codon 13 G13C"
+          }
+        }
+      },
+      "G13D": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.02,
+        "name_forms": {
+          "variations": {
+            "G13D": 0.8,
+            "G13D_mutation": 0.2
+          },
+          "realizations": {
+            "G13D": "G13D",
+            "G13D_mutation": "G13D mutation"
+          }
+        }
+      },
+      "Q61H": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.03,
+        "category": "codon_61",
+        "name_forms": {
+          "variations": {
+            "Q61H": 0.75,
+            "Q61H_mutation": 0.15,
+            "codon_61_Q61H": 0.1
+          },
+          "realizations": {
+            "Q61H": "Q61H",
+            "Q61H_mutation": "Q61H mutation",
+            "codon_61_Q61H": "codon 61 Q61H"
+          }
+        }
+      },
+      "Q61L": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.01,
+        "name_forms": {
+          "variations": {
+            "Q61L": 0.85,
+            "Q61L_mutation": 0.15
+          },
+          "realizations": {
+            "Q61L": "Q61L",
+            "Q61L_mutation": "Q61L mutation"
+          }
+        }
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma_western_smoker": {
+        "positive": 0.3,
+        "negative": 0.68,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "adenocarcinoma_western_nonsmoker": {
+        "positive": 0.1,
+        "negative": 0.88,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "adenocarcinoma_east_asian": {
+        "positive": 0.12,
+        "negative": 0.86,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "adenocarcinoma": {
+        "positive": 0.25,
+        "negative": 0.73,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "squamous": {
+        "positive": 0.06,
+        "negative": 0.92,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.55,
+        "PCR": 0.25,
+        "liquid_biopsy": 0.08,
+        "ctDNA": 0.05,
+        "unspecified": 0.07
+      }
+    }
+  },
+  "ALK": {
+    "canonical_name": "Anaplastic Lymphoma Kinase",
+    "alteration_type": "fusion",
+    "gene_location": "2p23.2-p23.1",
+    "notes": "Fusion/rearrangement biomarker. Primary alteration type is rearrangement, not point mutation. Variant list is fusion partners.",
+    "name_forms": {
+      "variations": {
+        "ALK": 0.5,
+        "ALK_rearrangement": 0.18,
+        "ALK_fusion": 0.15,
+        "ALK_positive": 0.07,
+        "ALK_gene_rearrangement": 0.05,
+        "ALK_translocation": 0.03,
+        "alk_lowercase": 0.02
+      },
+      "realizations": {
+        "ALK": "ALK",
+        "ALK_rearrangement": "ALK rearrangement",
+        "ALK_fusion": "ALK fusion",
+        "ALK_positive": "ALK-positive",
+        "ALK_gene_rearrangement": "ALK gene rearrangement",
+        "ALK_translocation": "ALK translocation",
+        "alk_lowercase": "alk"
+      }
+    },
+    "variants": {
+      "EML4_ALK": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.85,
+        "category": "fusion_EML4",
+        "notes": "Dominant fusion partner. Multiple structural variants (V1, V2, V3, V5).",
+        "name_forms": {
+          "variations": {
+            "EML4-ALK": 0.5,
+            "EML4_ALK_fusion": 0.2,
+            "EML4-ALK_variant_1": 0.05,
+            "EML4-ALK_V3": 0.08,
+            "EML4-ALK_V1": 0.05,
+            "EML4-ALK_rearrangement": 0.08,
+            "EML4_ALK": 0.04
+          },
+          "realizations": {
+            "EML4-ALK": "EML4-ALK",
+            "EML4_ALK_fusion": "EML4-ALK fusion",
+            "EML4-ALK_variant_1": "EML4-ALK variant 1",
+            "EML4-ALK_V3": "EML4-ALK V3",
+            "EML4-ALK_V1": "EML4-ALK V1",
+            "EML4-ALK_rearrangement": "EML4-ALK rearrangement",
+            "EML4_ALK": "EML4 ALK"
+          }
+        }
+      },
+      "KIF5B_ALK": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.05,
+        "name_forms": {
+          "variations": {
+            "KIF5B-ALK": 0.7,
+            "KIF5B_ALK_fusion": 0.3
+          },
+          "realizations": {
+            "KIF5B-ALK": "KIF5B-ALK",
+            "KIF5B_ALK_fusion": "KIF5B-ALK fusion"
+          }
+        }
+      },
+      "KLC1_ALK": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.02,
+        "name_forms": {
+          "variations": {
+            "KLC1-ALK": 0.75,
+            "KLC1_ALK_fusion": 0.25
+          },
+          "realizations": {
+            "KLC1-ALK": "KLC1-ALK",
+            "KLC1_ALK_fusion": "KLC1-ALK fusion"
+          }
+        }
+      },
+      "unspecified_fusion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.08,
+        "notes": "Reports often omit specific fusion partner. Renderer must force biomarker name_form that carries fusion/rearrangement signal.",
+        "name_forms": {
+          "variations": {
+            "unspecified_fusion_generic": 0.6,
+            "ALK_fusion_generic": 0.25,
+            "rearrangement_generic": 0.15
+          },
+          "realizations": {
+            "unspecified_fusion_generic": "",
+            "ALK_fusion_generic": "fusion",
+            "rearrangement_generic": "rearrangement"
+          }
+        },
+        "render_constraints": {
+          "require_biomarker_name_forms": [
+            "ALK_rearrangement",
+            "ALK_fusion",
+            "ALK_gene_rearrangement",
+            "ALK_translocation"
+          ]
+        }
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma_nonsmoker_younger": {
+        "positive": 0.08,
+        "negative": 0.9,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "adenocarcinoma": {
+        "positive": 0.05,
+        "negative": 0.93,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "squamous": {
+        "positive": 0.003,
+        "negative": 0.985,
+        "equivocal": 0.01,
+        "not_tested": 0.002
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "IHC": 0.35,
+        "FISH": 0.3,
+        "NGS": 0.25,
+        "RNA_seq": 0.05,
+        "unspecified": 0.05
+      }
+    }
+  },
+  "ROS1": {
+    "canonical_name": "ROS Proto-Oncogene 1, Receptor Tyrosine Kinase",
+    "alteration_type": "fusion",
+    "gene_location": "6q22.1",
+    "name_forms": {
+      "variations": {
+        "ROS1": 0.6,
+        "ROS1_rearrangement": 0.15,
+        "ROS1_fusion": 0.15,
+        "ROS-1": 0.04,
+        "ROS1_positive": 0.04,
+        "ros1_lowercase": 0.02
+      },
+      "realizations": {
+        "ROS1": "ROS1",
+        "ROS1_rearrangement": "ROS1 rearrangement",
+        "ROS1_fusion": "ROS1 fusion",
+        "ROS-1": "ROS-1",
+        "ROS1_positive": "ROS1-positive",
+        "ros1_lowercase": "ros1"
+      }
+    },
+    "variants": {
+      "CD74_ROS1": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.45,
+        "name_forms": {
+          "variations": {
+            "CD74-ROS1": 0.65,
+            "CD74_ROS1_fusion": 0.35
+          },
+          "realizations": {
+            "CD74-ROS1": "CD74-ROS1",
+            "CD74_ROS1_fusion": "CD74-ROS1 fusion"
+          }
+        }
+      },
+      "EZR_ROS1": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.15,
+        "name_forms": {
+          "variations": {
+            "EZR-ROS1": 0.7,
+            "EZR_ROS1_fusion": 0.3
+          },
+          "realizations": {
+            "EZR-ROS1": "EZR-ROS1",
+            "EZR_ROS1_fusion": "EZR-ROS1 fusion"
+          }
+        }
+      },
+      "SLC34A2_ROS1": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.15,
+        "name_forms": {
+          "variations": {
+            "SLC34A2-ROS1": 0.7,
+            "SLC34A2_ROS1_fusion": 0.3
+          },
+          "realizations": {
+            "SLC34A2-ROS1": "SLC34A2-ROS1",
+            "SLC34A2_ROS1_fusion": "SLC34A2-ROS1 fusion"
+          }
+        }
+      },
+      "unspecified_fusion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.25,
+        "notes": "Renderer must force biomarker name_form that carries fusion/rearrangement signal.",
+        "name_forms": {
+          "variations": {
+            "unspecified_generic": 0.6,
+            "ROS1_fusion_generic": 0.4
+          },
+          "realizations": {
+            "unspecified_generic": "",
+            "ROS1_fusion_generic": "fusion"
+          }
+        },
+        "render_constraints": {
+          "require_biomarker_name_forms": [
+            "ROS1_rearrangement",
+            "ROS1_fusion"
+          ]
+        }
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma": {
+        "positive": 0.015,
+        "negative": 0.975,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      },
+      "squamous": {
+        "positive": 0.002,
+        "negative": 0.988,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.4,
+        "FISH": 0.3,
+        "IHC": 0.15,
+        "RNA_seq": 0.1,
+        "unspecified": 0.05
+      }
+    }
+  },
+  "BRAF": {
+    "canonical_name": "B-Raf Proto-Oncogene, Serine/Threonine Kinase",
+    "alteration_type": "mutation",
+    "gene_location": "7q34",
+    "name_forms": {
+      "variations": {
+        "BRAF": 0.7,
+        "BRAF_mutation": 0.15,
+        "B-RAF": 0.05,
+        "BRAF_gene": 0.04,
+        "b-raf": 0.03,
+        "braf_lowercase": 0.03
+      },
+      "realizations": {
+        "BRAF": "BRAF",
+        "BRAF_mutation": "BRAF mutation",
+        "B-RAF": "B-RAF",
+        "BRAF_gene": "BRAF gene",
+        "b-raf": "b-raf",
+        "braf_lowercase": "braf"
+      }
+    },
+    "variants": {
+      "V600E": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.5,
+        "category": "class_I",
+        "notes": "Only FDA-approved actionable BRAF variant in NSCLC (dabrafenib + trametinib)",
+        "name_forms": {
+          "variations": {
+            "V600E": 0.5,
+            "BRAF_V600E": 0.2,
+            "V600E_mutation": 0.12,
+            "p.V600E": 0.08,
+            "Val600Glu": 0.03,
+            "c.1799T_A": 0.02,
+            "exon_15_V600E": 0.05
+          },
+          "realizations": {
+            "V600E": "V600E",
+            "BRAF_V600E": "V600E",
+            "V600E_mutation": "V600E mutation",
+            "p.V600E": "p.V600E",
+            "Val600Glu": "Val600Glu",
+            "c.1799T_A": "c.1799T>A",
+            "exon_15_V600E": "exon 15 V600E"
+          }
+        }
+      },
+      "V600K": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.08,
+        "category": "class_I",
+        "name_forms": {
+          "variations": {
+            "V600K": 0.75,
+            "V600K_mutation": 0.25
+          },
+          "realizations": {
+            "V600K": "V600K",
+            "V600K_mutation": "V600K mutation"
+          }
+        }
+      },
+      "G469A": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.12,
+        "category": "class_II",
+        "name_forms": {
+          "variations": {
+            "G469A": 0.7,
+            "G469A_mutation": 0.2,
+            "non-V600_G469A": 0.1
+          },
+          "realizations": {
+            "G469A": "G469A",
+            "G469A_mutation": "G469A mutation",
+            "non-V600_G469A": "non-V600 G469A"
+          }
+        }
+      },
+      "K601E": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.05,
+        "category": "class_II",
+        "name_forms": {
+          "variations": {
+            "K601E": 0.75,
+            "K601E_mutation": 0.25
+          },
+          "realizations": {
+            "K601E": "K601E",
+            "K601E_mutation": "K601E mutation"
+          }
+        }
+      },
+      "non_V600_generic": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.25,
+        "name_forms": {
+          "variations": {
+            "non-V600": 0.4,
+            "non-V600_BRAF": 0.3,
+            "BRAF_class_II": 0.15,
+            "BRAF_class_III": 0.15
+          },
+          "realizations": {
+            "non-V600": "non-V600 BRAF mutation",
+            "non-V600_BRAF": "non-V600 BRAF",
+            "BRAF_class_II": "class II mutation",
+            "BRAF_class_III": "class III mutation"
+          }
+        }
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma_smoker": {
+        "positive": 0.035,
+        "negative": 0.955,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      },
+      "adenocarcinoma_nonsmoker": {
+        "positive": 0.015,
+        "negative": 0.975,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      },
+      "adenocarcinoma": {
+        "positive": 0.025,
+        "negative": 0.965,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      },
+      "squamous": {
+        "positive": 0.005,
+        "negative": 0.985,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.55,
+        "PCR": 0.25,
+        "IHC": 0.1,
+        "liquid_biopsy": 0.05,
+        "unspecified": 0.05
+      }
+    }
+  },
+  "MET": {
+    "canonical_name": "MET Proto-Oncogene, Receptor Tyrosine Kinase",
+    "alteration_type": "composite",
+    "gene_location": "7q31.2",
+    "notes": "Three distinct actionable alteration types: exon 14 skipping, de novo amplification, acquired amplification. Variants categorize these.",
+    "name_forms": {
+      "variations": {
+        "MET": 0.55,
+        "MET_alteration": 0.12,
+        "c-MET": 0.1,
+        "cMET": 0.05,
+        "c-Met": 0.05,
+        "MET_gene": 0.05,
+        "HGFR": 0.03,
+        "MET_proto-oncogene": 0.02,
+        "met_lowercase": 0.03
+      },
+      "realizations": {
+        "MET": "MET",
+        "MET_alteration": "MET alteration",
+        "c-MET": "c-MET",
+        "cMET": "cMET",
+        "c-Met": "c-Met",
+        "MET_gene": "MET gene",
+        "HGFR": "HGFR",
+        "MET_proto-oncogene": "MET proto-oncogene",
+        "met_lowercase": "met"
+      }
+    },
+    "variants": {
+      "exon_14_skipping": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.6,
+        "category": "exon_14_skipping",
+        "notes": "Splice site mutations causing exon 14 loss; actionable with capmatinib/tepotinib",
+        "name_forms": {
+          "variations": {
+            "MET_exon_14_skipping": 0.3,
+            "MET_ex14_skipping": 0.2,
+            "METex14": 0.15,
+            "MET_ex14": 0.12,
+            "exon_14_skipping_mutation": 0.1,
+            "MET_exon_14_splice": 0.05,
+            "MET_exon_14": 0.08
+          },
+          "realizations": {
+            "MET_exon_14_skipping": "exon 14 skipping",
+            "MET_ex14_skipping": "ex14 skipping",
+            "METex14": "METex14",
+            "MET_ex14": "ex14",
+            "exon_14_skipping_mutation": "exon 14 skipping mutation",
+            "MET_exon_14_splice": "exon 14 splice site mutation",
+            "MET_exon_14": "exon 14"
+          }
+        }
+      },
+      "amplification_de_novo": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.3,
+        "category": "amplification",
+        "notes": "De novo; distinguished from acquired resistance amplification",
+        "name_forms": {
+          "variations": {
+            "MET_amplification": 0.4,
+            "MET_amp": 0.2,
+            "MET_high_level_amplification": 0.15,
+            "high_MET_copy_number": 0.1,
+            "MET_CNV": 0.08,
+            "MET_gene_amplification": 0.07
+          },
+          "realizations": {
+            "MET_amplification": "amplification",
+            "MET_amp": "amp",
+            "MET_high_level_amplification": "high-level MET amplification",
+            "high_MET_copy_number": "high MET copy number",
+            "MET_CNV": "CNV",
+            "MET_gene_amplification": "amplification"
+          }
+        }
+      },
+      "amplification_acquired": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.1,
+        "category": "amplification_resistance",
+        "notes": "Acquired post-EGFR TKI (typically osimertinib); most common osimertinib resistance mechanism",
+        "name_forms": {
+          "variations": {
+            "acquired_MET_amplification": 0.5,
+            "MET_amplification_resistance": 0.25,
+            "MET_amp_osimertinib_resistance": 0.15,
+            "acquired_MET_amp": 0.1
+          },
+          "realizations": {
+            "acquired_MET_amplification": "acquired MET amplification",
+            "MET_amplification_resistance": "amplification (resistance)",
+            "MET_amp_osimertinib_resistance": "amplification post-osimertinib",
+            "acquired_MET_amp": "acquired MET amp"
+          }
+        }
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma": {
+        "positive": 0.06,
+        "negative": 0.92,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "squamous": {
+        "positive": 0.02,
+        "negative": 0.96,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.45,
+        "FISH": 0.2,
+        "RNA_seq": 0.15,
+        "IHC": 0.1,
+        "liquid_biopsy": 0.05,
+        "unspecified": 0.05
+      }
+    }
+  },
+  "RET": {
+    "canonical_name": "Ret Proto-Oncogene",
+    "alteration_type": "fusion",
+    "gene_location": "10q11.21",
+    "name_forms": {
+      "variations": {
+        "RET": 0.6,
+        "RET_fusion": 0.15,
+        "RET_rearrangement": 0.15,
+        "RET_positive": 0.05,
+        "RET_gene": 0.03,
+        "ret_lowercase": 0.02
+      },
+      "realizations": {
+        "RET": "RET",
+        "RET_fusion": "RET fusion",
+        "RET_rearrangement": "RET rearrangement",
+        "RET_positive": "RET-positive",
+        "RET_gene": "RET gene",
+        "ret_lowercase": "ret"
+      }
+    },
+    "variants": {
+      "KIF5B_RET": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.7,
+        "notes": "Most common RET fusion partner in NSCLC",
+        "name_forms": {
+          "variations": {
+            "KIF5B-RET": 0.65,
+            "KIF5B_RET_fusion": 0.35
+          },
+          "realizations": {
+            "KIF5B-RET": "KIF5B-RET",
+            "KIF5B_RET_fusion": "KIF5B-RET fusion"
+          }
+        }
+      },
+      "CCDC6_RET": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.15,
+        "name_forms": {
+          "variations": {
+            "CCDC6-RET": 0.7,
+            "CCDC6_RET_fusion": 0.3
+          },
+          "realizations": {
+            "CCDC6-RET": "CCDC6-RET",
+            "CCDC6_RET_fusion": "CCDC6-RET fusion"
+          }
+        }
+      },
+      "NCOA4_RET": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.05,
+        "name_forms": {
+          "variations": {
+            "NCOA4-RET": 0.75,
+            "NCOA4_RET_fusion": 0.25
+          },
+          "realizations": {
+            "NCOA4-RET": "NCOA4-RET",
+            "NCOA4_RET_fusion": "NCOA4-RET fusion"
+          }
+        }
+      },
+      "unspecified_fusion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.1,
+        "notes": "Renderer must force biomarker name_form that carries fusion/rearrangement signal.",
+        "name_forms": {
+          "variations": {
+            "unspecified_generic": 0.6,
+            "RET_fusion_generic": 0.4
+          },
+          "realizations": {
+            "unspecified_generic": "",
+            "RET_fusion_generic": "fusion"
+          }
+        },
+        "render_constraints": {
+          "require_biomarker_name_forms": [
+            "RET_fusion",
+            "RET_rearrangement"
+          ]
+        }
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma": {
+        "positive": 0.015,
+        "negative": 0.975,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      },
+      "squamous": {
+        "positive": 0.002,
+        "negative": 0.988,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.5,
+        "FISH": 0.2,
+        "RNA_seq": 0.2,
+        "PCR": 0.05,
+        "unspecified": 0.05
+      }
+    }
+  },
+  "ERBB2": {
+    "canonical_name": "Erb-B2 Receptor Tyrosine Kinase 2",
+    "alteration_type": "composite",
+    "gene_location": "17q12",
+    "notes": "Three alteration categories: mutations (mostly exon 20 insertions), amplification, overexpression (IHC). Variants categorize these.",
+    "name_forms": {
+      "variations": {
+        "ERBB2": 0.3,
+        "HER2": 0.4,
+        "HER-2": 0.1,
+        "ERBB2_HER2": 0.08,
+        "HER2_neu": 0.04,
+        "ERBB2_gene": 0.03,
+        "her2_lowercase": 0.03,
+        "Her-2": 0.02
+      },
+      "realizations": {
+        "ERBB2": "ERBB2",
+        "HER2": "HER2",
+        "HER-2": "HER-2",
+        "ERBB2_HER2": "ERBB2 (HER2)",
+        "HER2_neu": "HER2/neu",
+        "ERBB2_gene": "ERBB2 gene",
+        "her2_lowercase": "her2",
+        "Her-2": "Her-2"
+      }
+    },
+    "variants": {
+      "exon_20_insertion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.7,
+        "category": "mutation_ex20ins",
+        "notes": "A775_G776insYVMA is most common; actionable with T-DXd and sevabertinib",
+        "name_forms": {
+          "variations": {
+            "ERBB2_exon_20_insertion": 0.25,
+            "HER2_exon_20_insertion": 0.25,
+            "HER2_ex20ins": 0.15,
+            "ERBB2_ex20ins": 0.1,
+            "YVMA_insertion": 0.08,
+            "A775_G776insYVMA": 0.07,
+            "HER2_exon_20": 0.05,
+            "ERBB2_exon_20": 0.05
+          },
+          "realizations": {
+            "ERBB2_exon_20_insertion": "exon 20 insertion",
+            "HER2_exon_20_insertion": "exon 20 insertion",
+            "HER2_ex20ins": "ex20ins",
+            "ERBB2_ex20ins": "ex20ins",
+            "YVMA_insertion": "YVMA insertion",
+            "A775_G776insYVMA": "A775_G776insYVMA",
+            "HER2_exon_20": "exon 20",
+            "ERBB2_exon_20": "exon 20"
+          }
+        }
+      },
+      "amplification": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.15,
+        "category": "amplification",
+        "name_forms": {
+          "variations": {
+            "HER2_amplification": 0.4,
+            "ERBB2_amplification": 0.3,
+            "HER2_amp": 0.15,
+            "ERBB2_amp": 0.1,
+            "HER2_ISH_positive": 0.05
+          },
+          "realizations": {
+            "HER2_amplification": "amplification",
+            "ERBB2_amplification": "amplification",
+            "HER2_amp": "amp",
+            "ERBB2_amp": "amp",
+            "HER2_ISH_positive": "ISH-positive"
+          }
+        }
+      },
+      "overexpression_IHC": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.1,
+        "category": "overexpression",
+        "notes": "Measured by IHC; different from amplification",
+        "name_forms": {
+          "variations": {
+            "HER2_overexpression": 0.4,
+            "HER2_IHC_3plus": 0.25,
+            "HER2_IHC_2plus": 0.15,
+            "HER2_IHC_positive": 0.1,
+            "HER2_protein_overexpression": 0.1
+          },
+          "realizations": {
+            "HER2_overexpression": "overexpression",
+            "HER2_IHC_3plus": "IHC 3+",
+            "HER2_IHC_2plus": "IHC 2+",
+            "HER2_IHC_positive": "IHC-positive",
+            "HER2_protein_overexpression": "protein overexpression"
+          }
+        }
+      },
+      "other_mutation": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.05,
+        "notes": "L755S, V842I, G660D — less common mutations",
+        "name_forms": {
+          "variations": {
+            "L755S": 0.4,
+            "V842I": 0.35,
+            "G660D": 0.25
+          },
+          "realizations": {
+            "L755S": "L755S",
+            "V842I": "V842I",
+            "G660D": "G660D"
+          }
+        }
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma": {
+        "positive": 0.025,
+        "negative": 0.965,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      },
+      "squamous": {
+        "positive": 0.003,
+        "negative": 0.987,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.45,
+        "IHC": 0.25,
+        "FISH": 0.15,
+        "PCR": 0.08,
+        "liquid_biopsy": 0.05,
+        "unspecified": 0.02
+      }
+    }
+  },
+  "NTRK": {
+    "canonical_name": "Neurotrophic Receptor Tyrosine Kinase (1/2/3)",
+    "alteration_type": "fusion",
+    "notes": "Pan-NTRK biomarker collapsing NTRK1/2/3. In practice reports often say 'NTRK fusion' without specifying subtype.",
+    "name_forms": {
+      "variations": {
+        "NTRK": 0.35,
+        "NTRK_fusion": 0.2,
+        "NTRK1": 0.1,
+        "NTRK3": 0.1,
+        "TRK": 0.08,
+        "pan-NTRK": 0.05,
+        "NTRK_rearrangement": 0.05,
+        "NTRK2": 0.03,
+        "NTRK_gene_fusion": 0.04
+      },
+      "realizations": {
+        "NTRK": "NTRK",
+        "NTRK_fusion": "NTRK fusion",
+        "NTRK1": "NTRK1",
+        "NTRK3": "NTRK3",
+        "TRK": "TRK",
+        "pan-NTRK": "pan-NTRK",
+        "NTRK_rearrangement": "NTRK rearrangement",
+        "NTRK2": "NTRK2",
+        "NTRK_gene_fusion": "NTRK gene fusion"
+      }
+    },
+    "variants": {
+      "NTRK1_fusion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.4,
+        "name_forms": {
+          "variations": {
+            "NTRK1_fusion_generic": 0.4,
+            "MPRIP-NTRK1": 0.25,
+            "CD74-NTRK1": 0.2,
+            "TPR-NTRK1": 0.15
+          },
+          "realizations": {
+            "NTRK1_fusion_generic": "fusion",
+            "MPRIP-NTRK1": "MPRIP-NTRK1",
+            "CD74-NTRK1": "CD74-NTRK1",
+            "TPR-NTRK1": "TPR-NTRK1"
+          }
+        }
+      },
+      "NTRK3_fusion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.4,
+        "name_forms": {
+          "variations": {
+            "NTRK3_fusion_generic": 0.4,
+            "ETV6-NTRK3": 0.6
+          },
+          "realizations": {
+            "NTRK3_fusion_generic": "fusion",
+            "ETV6-NTRK3": "ETV6-NTRK3"
+          }
+        }
+      },
+      "NTRK2_fusion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.05,
+        "name_forms": {
+          "variations": {
+            "NTRK2_fusion_generic": 1.0
+          },
+          "realizations": {
+            "NTRK2_fusion_generic": "fusion"
+          }
+        }
+      },
+      "unspecified_NTRK_fusion": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.15,
+        "notes": "Renderer must force biomarker name_form that carries fusion/rearrangement signal.",
+        "name_forms": {
+          "variations": {
+            "unspecified_generic": 0.7,
+            "pan_NTRK_fusion": 0.3
+          },
+          "realizations": {
+            "unspecified_generic": "",
+            "pan_NTRK_fusion": "fusion"
+          }
+        },
+        "render_constraints": {
+          "require_biomarker_name_forms": [
+            "NTRK_fusion",
+            "NTRK_rearrangement",
+            "NTRK_gene_fusion",
+            "pan-NTRK"
+          ]
+        }
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma": {
+        "positive": 0.003,
+        "negative": 0.987,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      },
+      "squamous": {
+        "positive": 0.001,
+        "negative": 0.989,
+        "equivocal": 0.005,
+        "not_tested": 0.005
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "RNA_seq": 0.4,
+        "NGS": 0.35,
+        "IHC": 0.15,
+        "FISH": 0.05,
+        "unspecified": 0.05
+      }
+    }
+  },
+  "PD-L1": {
+    "canonical_name": "Programmed Death Ligand 1",
+    "alteration_type": "expression",
+    "gene_location": "9p24.1",
+    "notes": "Expression-level biomarker. Variants represent positive scoring categories. negative_forms handles negative renderings separately. clone_attribution is an independent dimension.",
+    "name_forms": {
+      "variations": {
+        "PD-L1": 0.55,
+        "PDL1": 0.15,
+        "PD_L1": 0.1,
+        "PD-L1_expression": 0.08,
+        "CD274": 0.04,
+        "programmed_death_ligand_1": 0.03,
+        "pd-l1": 0.03,
+        "B7-H1": 0.02
+      },
+      "realizations": {
+        "PD-L1": "PD-L1",
+        "PDL1": "PDL1",
+        "PD_L1": "PD L1",
+        "PD-L1_expression": "PD-L1 expression",
+        "CD274": "CD274",
+        "programmed_death_ligand_1": "programmed death ligand 1",
+        "pd-l1": "pd-l1",
+        "B7-H1": "B7-H1"
+      }
+    },
+    "variants": {
+      "TPS_high": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.46,
+        "category": "TPS_50_plus",
+        "measurement_range": [
+          50,
+          100
+        ],
+        "name_forms": {
+          "variations": {
+            "TPS_percent_high": 0.4,
+            "TPS_gte_50": 0.2,
+            "high_expression": 0.15,
+            "strong_expression": 0.1,
+            "PD-L1_high": 0.1,
+            "PD-L1_strong_positive": 0.05
+          },
+          "realizations": {
+            "TPS_percent_high": "TPS {value}%",
+            "TPS_gte_50": "TPS ≥50%",
+            "high_expression": "high expression",
+            "strong_expression": "strong expression",
+            "PD-L1_high": "high",
+            "PD-L1_strong_positive": "strongly positive"
+          }
+        }
+      },
+      "TPS_intermediate": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.46,
+        "category": "TPS_1_to_49",
+        "measurement_range": [
+          1,
+          49
+        ],
+        "name_forms": {
+          "variations": {
+            "TPS_percent_mid": 0.5,
+            "TPS_1_49": 0.2,
+            "low_positive_expression": 0.15,
+            "intermediate_expression": 0.1,
+            "weak_positive": 0.05
+          },
+          "realizations": {
+            "TPS_percent_mid": "TPS {value}%",
+            "TPS_1_49": "TPS 1-49%",
+            "low_positive_expression": "low positive expression",
+            "intermediate_expression": "intermediate expression",
+            "weak_positive": "weakly positive"
+          }
+        }
+      },
+      "CPS": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.08,
+        "category": "CPS",
+        "measurement_range": [
+          1,
+          100
+        ],
+        "notes": "Less common in NSCLC; more in gastric/head and neck",
+        "name_forms": {
+          "variations": {
+            "CPS_value": 0.6,
+            "CPS_gte_1": 0.25,
+            "CPS_gte_10": 0.15
+          },
+          "realizations": {
+            "CPS_value": "CPS {value}",
+            "CPS_gte_1": "CPS ≥1",
+            "CPS_gte_10": "CPS ≥10"
+          }
+        }
+      }
+    },
+    "negative_forms": {
+      "$schema_type": "weighted_variations",
+      "description": "Rendered when status=negative. Separate from variants because PD-L1 negative is a distinct expression category, not a conditional-on-positive variant.",
+      "variations": {
+        "TPS_lt_1": 0.4,
+        "TPS_0": 0.3,
+        "TPS_percent_negative": 0.15,
+        "no_PD-L1_expression": 0.15
+      },
+      "realizations": {
+        "TPS_lt_1": "TPS <1%",
+        "TPS_0": "TPS 0%",
+        "TPS_percent_negative": "TPS {value}%",
+        "no_PD-L1_expression": "no PD-L1 expression"
+      },
+      "measurement_range_for_value_placeholder": [
+        0,
+        0
+      ]
+    },
+    "clone_attribution": {
+      "$schema_type": "weighted_variations_with_attachment",
+      "description": "IHC antibody clone attribution. Sampled INDEPENDENTLY of the TPS/CPS variant: first roll a Bernoulli with attachment_probability to decide whether to attach a clone at all, then sample a clone from variations if attached.",
+      "attachment_probability": 0.4,
+      "variations": {
+        "clone_22C3": 0.45,
+        "clone_28-8": 0.2,
+        "clone_SP263": 0.2,
+        "clone_SP142": 0.1,
+        "clone_with_company": 0.05
+      },
+      "realizations": {
+        "clone_22C3": "(Clone 22C3)",
+        "clone_28-8": "(Clone 28-8)",
+        "clone_SP263": "(Clone SP263)",
+        "clone_SP142": "(Clone SP142)",
+        "clone_with_company": "(Dako 22C3 pharmDx)"
+      }
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma": {
+        "positive": 0.6,
+        "negative": 0.38,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "squamous": {
+        "positive": 0.65,
+        "negative": 0.33,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "IHC": 0.95,
+        "unspecified": 0.05
+      }
+    }
+  },
+  "TMB": {
+    "canonical_name": "Tumor Mutational Burden",
+    "alteration_type": "expression",
+    "notes": "Quantitative panel-derived metric. Measurement is mutations per megabase. Variants represent positive categories; negative_forms handles low-TMB renderings.",
+    "name_forms": {
+      "variations": {
+        "TMB": 0.7,
+        "tumor_mutational_burden": 0.15,
+        "mutational_burden": 0.08,
+        "mutational_load": 0.05,
+        "tmb_lowercase": 0.02
+      },
+      "realizations": {
+        "TMB": "TMB",
+        "tumor_mutational_burden": "tumor mutational burden",
+        "mutational_burden": "mutational burden",
+        "mutational_load": "mutational load",
+        "tmb_lowercase": "tmb"
+      }
+    },
+    "variants": {
+      "TMB_high": {
+        "actionable": true,
+        "prevalence_within_biomarker": 1.0,
+        "category": "TMB_high",
+        "measurement_range": [
+          10,
+          100
+        ],
+        "name_forms": {
+          "variations": {
+            "TMB_high": 0.35,
+            "TMB_H": 0.2,
+            "TMB_value_mutMb": 0.2,
+            "TMB_gte_10": 0.15,
+            "high_TMB": 0.1
+          },
+          "realizations": {
+            "TMB_high": "high",
+            "TMB_H": "H",
+            "TMB_value_mutMb": "{value} mut/Mb",
+            "TMB_gte_10": "≥10 mut/Mb",
+            "high_TMB": "high TMB"
+          }
+        }
+      }
+    },
+    "negative_forms": {
+      "$schema_type": "weighted_variations",
+      "description": "Rendered when status=negative. TMB-low is a distinct low-expression category, not a variant.",
+      "variations": {
+        "TMB_low": 0.4,
+        "TMB_L": 0.25,
+        "TMB_value_mutMb_low": 0.2,
+        "low_TMB": 0.15
+      },
+      "realizations": {
+        "TMB_low": "low",
+        "TMB_L": "L",
+        "TMB_value_mutMb_low": "{value} mut/Mb",
+        "low_TMB": "low TMB"
+      },
+      "measurement_range_for_value_placeholder": [
+        0,
+        9
+      ]
+    },
+    "status_distribution_by_population": {
+      "adenocarcinoma": {
+        "positive": 0.18,
+        "negative": 0.8,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      },
+      "squamous": {
+        "positive": 0.2,
+        "negative": 0.78,
+        "equivocal": 0.01,
+        "not_tested": 0.01
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.85,
+        "comprehensive_genomic_profiling": 0.1,
+        "unspecified": 0.05
+      }
+    }
+  }
+}
