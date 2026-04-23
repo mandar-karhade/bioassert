@@ -46,7 +46,7 @@ COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
 BIOMARKERS_PATH = ROOT / "bioconfigs" / "biomarkers.json"
 # Keep generated corpora separated by sub-phase so prior snapshots survive
 # when we regen for a new sub-phase. Override via --output-dir for ad-hoc runs.
-OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.6"
+OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.7"
 
 MUTATION_BIOMARKERS: tuple[str, ...] = (
     "EGFR",
@@ -77,6 +77,35 @@ DEFAULT_L3S_FRACTION = 0.0
 DEFAULT_L4_FRACTION = 0.0
 DEFAULT_L4S_FRACTION = 0.0
 DEFAULT_L5_FRACTION = 0.0
+# Compounding tier split (applies only to L3/L3S/L4/L4S/L5 records). The
+# split is a binary low/high per user feedback 2026-04-23; medium was
+# collapsed into high. Defaults to 0.5/0.5 and must sum to 1.0.
+DEFAULT_COMPOUND_LOW = 0.5
+DEFAULT_COMPOUND_HIGH = 0.5
+
+_COMPOUND_LEVELS: frozenset[str] = frozenset({"L3", "L3S", "L4", "L4S", "L5"})
+
+
+def _sample_tier(rng: random.Random, low: float) -> str:
+    """Sample a compounding tier. Binary low/high split; low = exactly 2
+    genes, high = 3+ (clamped to pool size).
+    """
+    return "low" if rng.random() < low else "high"
+
+
+def _compound_pool(
+    tier: str, rng: random.Random
+) -> list[str]:
+    """Pick the biomarker pool for a compound record.
+
+    High tier may mix mutation and expression classes (per user direction
+    "high use almost all extra"); low keeps the pool homogeneous so the
+    surface stays clinically coherent for a 2-gene assertion.
+    """
+    if tier == "high":
+        return list(PANEL_BIOMARKERS)
+    pool_is_expression = rng.random() < L3_EXPRESSION_CLASS_PROB
+    return list(EXPRESSION_BIOMARKERS if pool_is_expression else MUTATION_BIOMARKERS)
 
 
 def _iter_records(
@@ -88,6 +117,8 @@ def _iter_records(
     l4_fraction: float,
     l4s_fraction: float,
     l5_fraction: float,
+    compound_low: float,
+    compound_high: float,
 ) -> Iterator[tuple[PatientProfile, str, str, PostProcessedRecord]]:
     common, biomarkers = load_configs(COMMON_PATH, BIOMARKERS_PATH)
     rng = random.Random(seed)
@@ -100,14 +131,13 @@ def _iter_records(
         l4s_bound = l4_bound + l4s_fraction
         l5_bound = l4s_bound + l5_fraction
         if roll < l3s_bound:
-            pool_is_expression = rng.random() < L3_EXPRESSION_CLASS_PROB
-            pool = list(
-                EXPRESSION_BIOMARKERS if pool_is_expression else MUTATION_BIOMARKERS
-            )
+            tier = _sample_tier(rng, compound_low)
+            pool = _compound_pool(tier, rng)
             level = "L3" if roll < l3_prose_bound else "L3S"
             rendered = render_l3_record(
                 pool, profile, biomarkers, common, rng,
                 complexity_level=level,
+                compounding_tier=tier,
             )
             post = apply_technical_noise(rendered, common, rng)
             first_fact = rendered.assertions[0]
@@ -117,14 +147,13 @@ def _iter_records(
             yield profile, first_fact.gene, first_matched_key, post
             continue
         if roll < l4s_bound:
-            pool_is_expression = rng.random() < L3_EXPRESSION_CLASS_PROB
-            pool = list(
-                EXPRESSION_BIOMARKERS if pool_is_expression else MUTATION_BIOMARKERS
-            )
+            tier = _sample_tier(rng, compound_low)
+            pool = _compound_pool(tier, rng)
             level = "L4" if roll < l4_bound else "L4S"
             rendered = render_l4_record(
                 pool, profile, biomarkers, common, rng,
                 complexity_level=level,
+                compounding_tier=tier,
             )
             post = apply_technical_noise(rendered, common, rng)
             first_fact = rendered.assertions[0]
@@ -134,12 +163,11 @@ def _iter_records(
             yield profile, first_fact.gene, first_matched_key, post
             continue
         if roll < l5_bound:
-            pool_is_expression = rng.random() < L3_EXPRESSION_CLASS_PROB
-            pool = list(
-                EXPRESSION_BIOMARKERS if pool_is_expression else MUTATION_BIOMARKERS
-            )
+            tier = _sample_tier(rng, compound_low)
+            pool = _compound_pool(tier, rng)
             rendered = render_l5_record(
-                pool, profile, biomarkers, common, rng
+                pool, profile, biomarkers, common, rng,
+                compounding_tier=tier,
             )
             post = apply_technical_noise(rendered, common, rng)
             first_fact = rendered.assertions[0]
@@ -193,6 +221,7 @@ def _record_to_dict(
         "record_id": f"{record.complexity_level.lower()}_{idx:06d}",
         "record_type": record.complexity_level.lower(),
         "complexity_level": record.complexity_level,
+        "compounding_tier": record.compounding_tier,
         "sentence": record.sentence,
         "patient_profile": asdict(profile),
         "assertions": assertions_out,
@@ -258,6 +287,25 @@ def main() -> None:
         default=DEFAULT_L5_FRACTION,
         help="Fraction of records to render as L5 negation-scope",
     )
+    parser.add_argument(
+        "--compound-low",
+        type=float,
+        default=DEFAULT_COMPOUND_LOW,
+        help=(
+            "Fraction of compound (L3/L3S/L4/L4S/L5) records rendered at the "
+            "'low' compounding tier (< 3 genes, i.e., exactly 2)."
+        ),
+    )
+    parser.add_argument(
+        "--compound-high",
+        type=float,
+        default=DEFAULT_COMPOUND_HIGH,
+        help=(
+            "Fraction of compound records rendered at the 'high' tier "
+            "(3+ genes, 3-8 clamped to pool size; cross-class pool mixing "
+            "allowed). Must sum with --compound-low to 1.0."
+        ),
+    )
     args = parser.parse_args()
     for flag, val in (
         ("--l2-fraction", args.l2_fraction),
@@ -266,6 +314,8 @@ def main() -> None:
         ("--l4-fraction", args.l4_fraction),
         ("--l4s-fraction", args.l4s_fraction),
         ("--l5-fraction", args.l5_fraction),
+        ("--compound-low", args.compound_low),
+        ("--compound-high", args.compound_high),
     ):
         if not 0.0 <= val <= 1.0:
             parser.error(f"{flag} must be in [0, 1]")
@@ -282,6 +332,11 @@ def main() -> None:
             "--l2-fraction + --l3-fraction + --l3s-fraction + "
             "--l4-fraction + --l4s-fraction + --l5-fraction must be <= 1.0"
         )
+    if abs(args.compound_low + args.compound_high - 1.0) > 1e-6:
+        parser.error(
+            "--compound-low + --compound-high must equal 1.0 "
+            "(binary tier split; medium was removed in 3.7)"
+        )
 
     output_dir: Path = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -291,6 +346,9 @@ def main() -> None:
     status_counts: dict[tuple[str, str], Counter] = defaultdict(Counter)
     totals_by_pair: Counter = Counter()
     complexity_counts: Counter = Counter()
+    # Compound-only: tier counts overall and per complexity level.
+    compound_tier_counts: Counter = Counter()
+    tier_by_level: dict[str, Counter] = defaultdict(Counter)
 
     sentences_seen: Counter = Counter()
     span_violations = 0
@@ -306,6 +364,8 @@ def main() -> None:
                 args.l4_fraction,
                 args.l4s_fraction,
                 args.l5_fraction,
+                args.compound_low,
+                args.compound_high,
             )
         ):
             f.write(
@@ -333,6 +393,9 @@ def main() -> None:
                     totals_by_pair[pair_key] += 1
             sentences_seen[record.sentence] += 1
             complexity_counts[record.complexity_level] += 1
+            if record.complexity_level in _COMPOUND_LEVELS:
+                compound_tier_counts[record.compounding_tier] += 1
+                tier_by_level[record.complexity_level][record.compounding_tier] += 1
 
     common, biomarkers = load_configs(COMMON_PATH, BIOMARKERS_PATH)
 
@@ -367,6 +430,16 @@ def main() -> None:
                 within_2sigma += 1
 
     max_dupe_sentence, max_dupe_count = sentences_seen.most_common(1)[0]
+    compound_total = sum(compound_tier_counts.values())
+
+    def _tier_fraction(tier: str) -> float:
+        if compound_total == 0:
+            return 0.0
+        return round(compound_tier_counts.get(tier, 0) / compound_total, 4)
+
+    tier_breakdown_by_level: dict[str, dict[str, int]] = {
+        level: dict(counts) for level, counts in sorted(tier_by_level.items())
+    }
     report = {
         "n_records": args.n,
         "seed": args.seed,
@@ -395,6 +468,13 @@ def main() -> None:
             complexity_counts.get("L5", 0) / max(args.n, 1), 4
         ),
         "complexity_counts": dict(complexity_counts),
+        "compound_low_fraction_requested": args.compound_low,
+        "compound_low_fraction_observed": _tier_fraction("low"),
+        "compound_high_fraction_requested": args.compound_high,
+        "compound_high_fraction_observed": _tier_fraction("high"),
+        "compound_total": compound_total,
+        "compound_tier_counts": dict(compound_tier_counts),
+        "compound_tier_by_level": tier_breakdown_by_level,
         "panel_biomarkers": list(PANEL_BIOMARKERS),
         "within_2sigma_count": within_2sigma,
         "total_checks": total_checks,

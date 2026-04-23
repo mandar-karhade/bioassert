@@ -45,6 +45,7 @@ class PostProcessedRecord:
     frame_template: str
     applied_transforms: dict[str, str]
     complexity_level: str = "L1"
+    compounding_tier: str = "low"
 
 
 _ALPHA_ONLY = re.compile(r"^[A-Za-z]+$")
@@ -120,6 +121,7 @@ def apply_technical_noise(
         frame_template=record.frame_template,
         applied_transforms=applied,
         complexity_level=record.complexity_level,
+        compounding_tier=record.compounding_tier,
     )
 
 
@@ -143,6 +145,7 @@ def _passthrough_post_process(record: RenderedRecord) -> PostProcessedRecord:
         frame_template=record.frame_template,
         applied_transforms=skipped,
         complexity_level=record.complexity_level,
+        compounding_tier=record.compounding_tier,
     )
 
 
