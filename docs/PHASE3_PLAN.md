@@ -156,11 +156,14 @@ Parallel to 3.3 — shorthand form of heterogeneous multi-gene. `EGFR +, ALK -, 
 ## Execution rhythm
 
 Each sub-phase follows the same loop:
-1. Update `docs/PHASE3_PLAN.md` with any scope-shift decisions made during implementation.
-2. TDD: write failing tests for the new behavior.
-3. Implement to green.
-4. Run full pytest + generate a sanity-size corpus (5K records) and inspect.
-5. Run the full 50K corpus + prevalence report before advancing to the next sub-phase.
-6. Commit with a clear `feat(phase3.N):` or `refactor(phase3.N):` prefix.
+1. Branch off `main` as `phase3.N/<slug>`.
+2. Update `docs/PHASE3_PLAN.md` with any scope-shift decisions made during implementation.
+3. TDD: write failing tests for the new behavior.
+4. Implement to green.
+5. Run full pytest.
+6. Generate the 50K corpus + prevalence report.
+7. **Surface a sample of the newly generated corpus to the user and wait for approval.** Tests verify code correctness, not data correctness — the user must eyeball representative records before merge.
+8. After explicit user approval, merge the PR to `main` with `gh pr merge --merge` (no squash, no branch delete).
+9. Commit prefix: `feat(phase3.N):` or `refactor(phase3.N):`.
 
 Update the top-of-spec status line as each sub-phase ships.
