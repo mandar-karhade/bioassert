@@ -28,27 +28,20 @@ from typing import Optional
 
 from bioassert.config.loader import CommonConfig
 from bioassert.config.schema import PostProcessTransformations
-from bioassert.generator.renderer import RenderedRecord
+from bioassert.generator.renderer import AssertionFact, RenderedRecord
 
 
 @dataclass(frozen=True)
 class PostProcessedRecord:
     """A :class:`RenderedRecord` plus the chosen noise decisions.
 
-    ``sentence`` and ``spans`` reflect the POST-transformation state; the
-    invariant ``sentence[start:end] == labeled_substring`` still holds for
-    every entry in ``spans`` including ``clone`` when attached.
+    ``sentence`` and every ``AssertionFact.spans`` reflect the POST-transformation
+    state; the invariant ``sentence[start:end] == labeled_substring`` still holds
+    for every entry in every fact's ``spans`` including ``clone`` when attached.
     """
 
     sentence: str
-    spans: dict[str, tuple[int, int]]
-    gene: str
-    variant_id: Optional[str]
-    negative_form_id: Optional[str]
-    clone_id: Optional[str]
-    status: str
-    test_method: Optional[str]
-    measurement_value: Optional[float]
+    assertions: tuple[AssertionFact, ...]
     frame_template: str
     applied_transforms: dict[str, str]
     complexity_level: str = "L1"
@@ -75,8 +68,14 @@ def apply_technical_noise(
             "post_process_transformations block"
         )
 
+    if len(record.assertions) != 1:
+        raise PostProcessError(
+            "apply_technical_noise currently only supports single-assertion "
+            f"records; got {len(record.assertions)}"
+        )
+    original_fact = record.assertions[0]
     sentence = record.sentence
-    spans = dict(record.spans)
+    spans = dict(original_fact.spans)
     applied: dict[str, str] = {}
 
     if "hyphenation_gene_names" in noise.categories:
@@ -107,16 +106,19 @@ def apply_technical_noise(
         if mode != "canonical":
             sentence, spans = _apply_punctuation(sentence, spans, mode, rng)
 
+    new_fact = AssertionFact(
+        gene=original_fact.gene,
+        status=original_fact.status,
+        spans=spans,
+        variant_id=original_fact.variant_id,
+        negative_form_id=original_fact.negative_form_id,
+        clone_id=original_fact.clone_id,
+        test_method=original_fact.test_method,
+        measurement_value=original_fact.measurement_value,
+    )
     return PostProcessedRecord(
         sentence=sentence,
-        spans=spans,
-        gene=record.gene,
-        variant_id=record.variant_id,
-        negative_form_id=record.negative_form_id,
-        clone_id=record.clone_id,
-        status=record.status,
-        test_method=record.test_method,
-        measurement_value=record.measurement_value,
+        assertions=(new_fact,),
         frame_template=record.frame_template,
         applied_transforms=applied,
         complexity_level=record.complexity_level,

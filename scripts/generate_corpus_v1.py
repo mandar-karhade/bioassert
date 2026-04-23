@@ -87,27 +87,33 @@ def _record_to_dict(
     record: PostProcessedRecord,
     idx: int,
 ) -> dict:
-    labeled_spans = [
-        {"span_type": name, "text": record.sentence[s:e], "char_span": [s, e]}
-        for name, (s, e) in sorted(record.spans.items(), key=lambda kv: kv[1])
-    ]
+    assertions_out: list[dict] = []
+    labeled_spans: list[dict] = []
+    for fact in record.assertions:
+        assertions_out.append(
+            {
+                "gene": fact.gene,
+                "variant_id": fact.variant_id,
+                "negative_form_id": fact.negative_form_id,
+                "clone_id": fact.clone_id,
+                "status": fact.status,
+                "test_method": fact.test_method,
+                "measurement_value": fact.measurement_value,
+                "frame_template": record.frame_template,
+                "matched_population_key": matched_key,
+            }
+        )
+        labeled_spans.extend(
+            {"span_type": name, "text": record.sentence[s:e], "char_span": [s, e]}
+            for name, (s, e) in sorted(fact.spans.items(), key=lambda kv: kv[1])
+        )
     return {
         "record_id": f"{record.complexity_level.lower()}_{idx:06d}",
         "record_type": record.complexity_level.lower(),
         "complexity_level": record.complexity_level,
         "sentence": record.sentence,
         "patient_profile": asdict(profile),
-        "assertion": {
-            "gene": gene,
-            "variant_id": record.variant_id,
-            "negative_form_id": record.negative_form_id,
-            "clone_id": record.clone_id,
-            "status": record.status,
-            "test_method": record.test_method,
-            "measurement_value": record.measurement_value,
-            "frame_template": record.frame_template,
-            "matched_population_key": matched_key,
-        },
+        "assertions": assertions_out,
         "labeled_spans": labeled_spans,
         "post_process": record.applied_transforms,
     }
@@ -165,13 +171,15 @@ def main() -> None:
                 + "\n"
             )
 
-            for name, (s, e) in record.spans.items():
-                if record.sentence[s:e] == "":
-                    span_violations += 1
+            for fact in record.assertions:
+                for name, (s, e) in fact.spans.items():
+                    if record.sentence[s:e] == "":
+                        span_violations += 1
 
             pair_key = (gene, matched_key)
-            status_counts[pair_key][record.status] += 1
-            totals_by_pair[pair_key] += 1
+            for fact in record.assertions:
+                status_counts[pair_key][fact.status] += 1
+                totals_by_pair[pair_key] += 1
             sentences_seen[record.sentence] += 1
             complexity_counts[record.complexity_level] += 1
 
