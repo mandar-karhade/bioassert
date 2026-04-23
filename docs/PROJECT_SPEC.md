@@ -201,11 +201,33 @@ Report performance with noise on vs off.
 
 ### Layer 6 — Probabilistic Clinical Realism
 
-Pull prevalence from published NSCLC molecular epidemiology. Condition on simulated patient attributes:
-- Demographics (sex, age, ethnicity)
-- Smoking status
-- Histology (adenocarcinoma, squamous, small cell)
-- Stage
+Pull positive/negative/equivocal/not-tested distributions from published NSCLC
+molecular epidemiology and condition them on a simulated `PatientProfile`.
+
+**Scope: prevalence sampling only.** Patient attributes influence *which*
+status is sampled for a given biomarker — they do **not** drive surface-text
+variation. We deliberately do not vary sentence frames, tone, or vocabulary
+based on patient demographics. `PatientProfile` axes act exclusively as
+covariates on the status distribution.
+
+Implemented axes (see [`bioassert/generator/patient_sampler.py`](../bioassert/generator/patient_sampler.py)):
+
+| Axis        | Values                                     |
+|-------------|--------------------------------------------|
+| histology   | adenocarcinoma, squamous, other            |
+| ethnicity   | western, east_asian, other                 |
+| smoking     | smoker, former_smoker, nonsmoker           |
+| age_group   | older, younger                             |
+| sex         | male, female                               |
+
+Population-key cascade (§2.3): keys are joined as
+`{histology}_{ethnicity}_{smoking}_{age_group}_{sex}` and progressively
+dropped right-to-left until a biomarker config match is found. Terminal
+fallback is `{histology}` alone.
+
+**Not implemented, not planned for v1:** stage (I–IV), grade, comorbidities,
+treatment line, site-of-biopsy, or any axis that would drive surface-text
+variation beyond status prevalence.
 
 Prevalence table (ground source: PIONEER, GENIE, LCMC, published meta-analyses):
 - EGFR: 15% Western / 45% East Asian (adenocarcinoma)
