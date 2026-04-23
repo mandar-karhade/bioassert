@@ -76,6 +76,7 @@ class AssertionFact:
     clone_id: Optional[str] = None
     test_method: Optional[str] = None
     measurement_value: Optional[float] = None
+    polarity_scope: str = "direct"
 
 
 @dataclass(frozen=True)
@@ -176,6 +177,44 @@ _L4_SHORTHAND_FRAMES: list[dict] = [
     {"inner": ": ", "sep": "\n"},
     {"inner": "\t", "sep": "\n"},
 ]
+
+# L5 negation-scope frames. Two structural ``kind`` values:
+#
+# - ``"enumerated"``: scope marker ("No" / "Absence of") negates an explicit
+#   list of genes; optional exception clause introduces one trailing gene.
+#   Clinical register drops "but"/"however" — the natural exception markers
+#   are "and" (continuation, same negative polarity) and "except" (polarity
+#   flip, positive). ``exception_marker=None`` is the dominant case.
+#
+# - ``"panel_wide"``: implicit "panel" as the scope (no enumerated genes);
+#   one trailing gene surfaces through "other than" as the sole labeled
+#   fact with ``polarity_scope="exception"``. No wide-scope facts emitted
+#   because the wide scope is unnamed.
+_L5_FRAMES: list[dict] = [
+    # 6 enumerated None frames — dominant (~60%).
+    {"kind": "enumerated", "scope_marker": "No", "neg_noun": "mutations", "exception_marker": None, "exception_status": None},
+    {"kind": "enumerated", "scope_marker": "No", "neg_noun": "alterations", "exception_marker": None, "exception_status": None},
+    {"kind": "enumerated", "scope_marker": "No", "neg_noun": "mutations detected", "exception_marker": None, "exception_status": None},
+    {"kind": "enumerated", "scope_marker": "No", "neg_noun": "alterations detected", "exception_marker": None, "exception_status": None},
+    {"kind": "enumerated", "scope_marker": "Absence of", "neg_noun": "mutations", "exception_marker": None, "exception_status": None},
+    {"kind": "enumerated", "scope_marker": "Absence of", "neg_noun": "alterations", "exception_marker": None, "exception_status": None},
+    # 2 enumerated "and" frames — continuation, same negative polarity.
+    {"kind": "enumerated", "scope_marker": "No", "neg_noun": "mutations", "exception_marker": "and", "exception_status": "negative"},
+    {"kind": "enumerated", "scope_marker": "No", "neg_noun": "alterations", "exception_marker": "and", "exception_status": "negative"},
+    # 2 enumerated "except" frames — polarity flip, positive.
+    {"kind": "enumerated", "scope_marker": "No", "neg_noun": "mutations", "exception_marker": "except", "exception_status": "positive"},
+    {"kind": "enumerated", "scope_marker": "Absence of", "neg_noun": "alterations", "exception_marker": "except", "exception_status": "positive"},
+    # 4 panel_wide frames — implicit panel, "other than" marks the sole
+    # labeled fact. ``status_word`` is the literal positive/negative token
+    # embedded in the scope phrase and owns the wide polarity reading.
+    {"kind": "panel_wide", "scope": "No biomarker on the panel was", "status_word": "positive", "exception_marker": "other than"},
+    {"kind": "panel_wide", "scope": "No gene on this panel was", "status_word": "positive", "exception_marker": "other than"},
+    {"kind": "panel_wide", "scope": "No panel biomarker was", "status_word": "positive", "exception_marker": "other than"},
+    {"kind": "panel_wide", "scope": "No panel gene tested", "status_word": "positive", "exception_marker": "other than"},
+]
+
+L5_MIN_WIDE = 2
+L5_MAX_WIDE = 4
 
 L3_MIN_N = 2
 L3_MAX_N = 4
@@ -994,3 +1033,231 @@ def _l4_joiner(
             return ", and " if use_oxford else " and "
         return f"{sep}{final} "
     return sep
+
+
+def render_l5_record(
+    biomarker_pool: list[str],
+    profile: PatientProfile,
+    biomarkers: BiomarkerConfig,
+    common: CommonConfig,
+    rng: random.Random,
+    n_wide: Optional[int] = None,
+) -> RenderedRecord:
+    """Render one L5 negation-scope record.
+
+    Two structural frame kinds:
+
+    - ``"enumerated"``: a scope marker ("No" / "Absence of") negates a list
+      of N genes wide (``N_wide ∈ [L5_MIN_WIDE, L5_MAX_WIDE]``). All wide
+      facts share one status span on the scope marker and carry
+      ``polarity_scope="negation_wide"`` with status ``"negative"``. An
+      optional exception clause ("and" continuation with same negative
+      polarity, or "except" flip to positive) adds one trailing gene with
+      ``polarity_scope="exception"`` and its own status span. The majority
+      of frames carry no exception — this matches clinical register.
+
+    - ``"panel_wide"``: the wide scope is an implicit panel ("No biomarker
+      on the panel was positive"); no genes are enumerated, so no
+      wide-scope facts are emitted. One trailing gene after "other than"
+      becomes the sole fact with ``polarity_scope="exception"`` and status
+      set to the frame's ``status_word`` (the polarity the panel lacked).
+
+    The caller is responsible for keeping the pool homogeneous
+    (mutation-class vs expression-class); the renderer does not enforce this.
+    """
+    pool_size = len(biomarker_pool)
+    if pool_size < L5_MIN_WIDE:
+        raise RenderError(
+            f"L5 pool needs >= {L5_MIN_WIDE} biomarkers, got {pool_size}"
+        )
+
+    frame = rng.choice(_L5_FRAMES)
+    if frame["kind"] == "panel_wide":
+        return _render_l5_panel_wide(frame, biomarker_pool, biomarkers, rng)
+
+    scope_marker: str = frame["scope_marker"]
+    neg_noun: str = frame["neg_noun"]
+    exception_marker: Optional[str] = frame["exception_marker"]
+    exception_status: Optional[str] = frame["exception_status"]
+
+    max_wide = min(L5_MAX_WIDE, pool_size)
+    if n_wide is None:
+        n_wide = rng.randint(L5_MIN_WIDE, max_wide)
+    elif not L5_MIN_WIDE <= n_wide <= max_wide:
+        raise RenderError(
+            f"n_wide must be in [{L5_MIN_WIDE}, {max_wide}], got {n_wide}"
+        )
+
+    has_exception = exception_marker is not None and pool_size > n_wide
+    total_n = n_wide + (1 if has_exception else 0)
+    gene_names = rng.sample(biomarker_pool, total_n)
+    wide_names = gene_names[:n_wide]
+    ex_name = gene_names[n_wide] if has_exception else None
+
+    wide_surfaces: list[str] = []
+    for name in wide_names:
+        b = biomarkers.get(name)
+        form_id = _bare_gene_name_form(b, rng)
+        wide_surfaces.append(b.name_forms.realizations[form_id])
+
+    ex_surface: Optional[str] = None
+    ex_status_surface: Optional[str] = None
+    ex_status: Optional[str] = None
+    if has_exception and ex_name is not None:
+        b = biomarkers.get(ex_name)
+        form_id = _bare_gene_name_form(b, rng)
+        ex_surface = b.name_forms.realizations[form_id]
+        ex_status = exception_status or "positive"
+        _, raw = _sample_status_phrase(
+            ex_status, common, rng, complexity_level="L1"
+        )
+        ex_status_surface = expand_placeholders(raw, {"gene": ex_surface})
+
+    gene_list_surface, gene_positions_in_list = _coordinate_gene_list(
+        wide_surfaces, rng
+    )
+
+    pieces: list[str] = []
+    pos = 0
+    scope_start = pos
+    pieces.append(scope_marker)
+    pos += len(scope_marker)
+    scope_end = pos
+    pieces.append(" ")
+    pos += 1
+    gene_list_start = pos
+    pieces.append(gene_list_surface)
+    pos += len(gene_list_surface)
+    pieces.append(" ")
+    pos += 1
+    pieces.append(neg_noun)
+    pos += len(neg_noun)
+
+    ex_gene_span: Optional[tuple[int, int]] = None
+    ex_status_span: Optional[tuple[int, int]] = None
+    if has_exception and ex_surface is not None and ex_status_surface is not None:
+        pieces.append(" ")
+        pos += 1
+        pieces.append(exception_marker)  # type: ignore[arg-type]
+        pos += len(exception_marker)  # type: ignore[arg-type]
+        pieces.append(" ")
+        pos += 1
+        ex_gene_start = pos
+        pieces.append(ex_surface)
+        pos += len(ex_surface)
+        ex_gene_end = pos
+        ex_gene_span = (ex_gene_start, ex_gene_end)
+        pieces.append(" ")
+        pos += 1
+        ex_status_start = pos
+        pieces.append(ex_status_surface)
+        pos += len(ex_status_surface)
+        ex_status_end = pos
+        ex_status_span = (ex_status_start, ex_status_end)
+
+    pieces.append(".")
+    sentence = "".join(pieces)
+
+    shared_status_span = (scope_start, scope_end)
+    assertions: list[AssertionFact] = []
+    for name, (s, e) in zip(wide_names, gene_positions_in_list):
+        assertions.append(
+            AssertionFact(
+                gene=name,
+                status="negative",
+                spans={
+                    "gene": (gene_list_start + s, gene_list_start + e),
+                    "status": shared_status_span,
+                },
+                polarity_scope="negation_wide",
+            )
+        )
+    if has_exception and ex_name is not None and ex_gene_span is not None and ex_status_span is not None:
+        assertions.append(
+            AssertionFact(
+                gene=ex_name,
+                status=ex_status or "positive",
+                spans={
+                    "gene": ex_gene_span,
+                    "status": ex_status_span,
+                },
+                polarity_scope="exception",
+            )
+        )
+
+    if has_exception:
+        frame_template = (
+            f"{scope_marker} {{gene_list}} {neg_noun} "
+            f"{exception_marker} {{ex_gene}} {{ex_status}}."
+        )
+    else:
+        frame_template = f"{scope_marker} {{gene_list}} {neg_noun}."
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=tuple(assertions),
+        frame_template=frame_template,
+        complexity_level="L5",
+    )
+
+
+def _render_l5_panel_wide(
+    frame: dict,
+    biomarker_pool: list[str],
+    biomarkers: BiomarkerConfig,
+    rng: random.Random,
+) -> RenderedRecord:
+    """Render a panel-wide L5 record: implicit panel scope, one exception.
+
+    Surface: ``"{scope} {status_word} other than {gene}."`` — the scope
+    phrase embeds the polarity ("positive") as a literal token that serves
+    as the status span for the single labeled fact. No wide-scope facts
+    are emitted because the panel genes are not named.
+    """
+    scope: str = frame["scope"]
+    status_word: str = frame["status_word"]
+    exception_marker: str = frame["exception_marker"]
+
+    ex_name = rng.choice(biomarker_pool)
+    b = biomarkers.get(ex_name)
+    form_id = _bare_gene_name_form(b, rng)
+    ex_surface = b.name_forms.realizations[form_id]
+
+    pieces: list[str] = []
+    pos = 0
+    pieces.append(scope)
+    pos += len(scope)
+    pieces.append(" ")
+    pos += 1
+    status_start = pos
+    pieces.append(status_word)
+    pos += len(status_word)
+    status_end = pos
+    pieces.append(" ")
+    pos += 1
+    pieces.append(exception_marker)
+    pos += len(exception_marker)
+    pieces.append(" ")
+    pos += 1
+    gene_start = pos
+    pieces.append(ex_surface)
+    pos += len(ex_surface)
+    gene_end = pos
+    pieces.append(".")
+    sentence = "".join(pieces)
+
+    fact = AssertionFact(
+        gene=ex_name,
+        status=status_word,
+        spans={
+            "gene": (gene_start, gene_end),
+            "status": (status_start, status_end),
+        },
+        polarity_scope="exception",
+    )
+    frame_template = f"{scope} {status_word} {exception_marker} {{ex_gene}}."
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=(fact,),
+        frame_template=frame_template,
+        complexity_level="L5",
+    )
