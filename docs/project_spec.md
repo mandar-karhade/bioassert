@@ -202,47 +202,34 @@ Report performance with noise on vs off.
 ### Layer 6 — Probabilistic Clinical Realism
 
 Pull positive/negative/equivocal/not-tested distributions from published NSCLC
-molecular epidemiology and condition them on a simulated `PatientProfile`.
+molecular epidemiology and bake them into `biomarkers.json` as a flat per-biomarker
+prior.
 
-**Scope: prevalence sampling only.** Patient attributes influence *which*
-status is sampled for a given biomarker — they do **not** drive surface-text
-variation. We deliberately do not vary sentence frames, tone, or vocabulary
-based on patient demographics. `PatientProfile` axes act exclusively as
-covariates on the status distribution.
+**Scope: prevalence sampling only.** One `biomarkers.json` describes one cohort
+(the shipped config targets lung adenocarcinoma). No patient-profile conditioning:
+the NER/assertion extraction task is invariant to who the patient is, so
+demographic cascade was removed in v1.2. To target a different cohort, author a
+separate `biomarkers.json` and mix generated corpora externally at the desired
+ratio.
 
-Implemented axes (see [`bioassert/generator/patient_sampler.py`](../bioassert/generator/patient_sampler.py)):
-
-| Axis        | Values                                     |
-|-------------|--------------------------------------------|
-| histology   | adenocarcinoma, squamous, other            |
-| ethnicity   | western, east_asian, other                 |
-| smoking     | smoker, former_smoker, nonsmoker           |
-| age_group   | older, younger                             |
-| sex         | male, female                               |
-
-Population-key cascade (§2.3): keys are joined as
-`{histology}_{ethnicity}_{smoking}_{age_group}_{sex}` and progressively
-dropped right-to-left until a biomarker config match is found. Terminal
-fallback is `{histology}` alone.
-
-**Not implemented, not planned for v1:** stage (I–IV), grade, comorbidities,
-treatment line, site-of-biopsy, or any axis that would drive surface-text
-variation beyond status prevalence.
-
-Prevalence table (ground source: PIONEER, GENIE, LCMC, published meta-analyses):
-- EGFR: 15% Western / 45% East Asian (adenocarcinoma)
-- KRAS: 25–30% (smokers, adenocarcinoma)
+Prevalence table (ground source: PIONEER, GENIE, LCMC, published meta-analyses;
+adenocarcinoma-weighted):
+- EGFR: 20% (adenocarcinoma, cohort-weighted average across Western + East Asian)
+- KRAS: 25%
 - ALK: 5%
 - ROS1: 1–2%
-- BRAF V600E: 1–2%
-- MET exon 14: 3–4%
+- BRAF V600E: 2–3%
+- MET exon 14: 6%
 - RET: 1–2%
 - HER2: 2–3%
-- PD-L1 ≥50%: 30%
+- PD-L1 ≥1%: 60% (positive); ≥50%: ~30%
 - TMB high (≥10 mut/Mb): 15–20%
-- Co-mutations: TP53 with EGFR ~55%, STK11 with KRAS ~20%
 
 Cite every prevalence source in the dataset card. This is the credibility layer.
+
+**Not implemented, not planned for v1:** stage (I–IV), grade, comorbidities,
+treatment line, site-of-biopsy, ethnicity × smoking cascade, or any axis that
+would drive surface-text variation beyond status prevalence.
 
 ### Layer 7 — Document-Level Composition
 
@@ -398,12 +385,11 @@ bioassert/
 │   │   ├── __init__.py
 │   │   ├── schema.py             # discriminated-union Pydantic models
 │   │   ├── loader.py             # JSON loading
-│   │   └── validator.py          # 12-check validation (config_architecture.md §7)
+│   │   └── validator.py          # cross-config validation (config_architecture.md §7)
 │   ├── generator/
 │   │   ├── __init__.py
-│   │   ├── patient_sampler.py    # PatientProfile + population key cascade
 │   │   ├── sampler.py            # weighted sampling, render_constraints, clone Bernoulli
-│   │   ├── renderer.py           # L1/L2 frames + placeholder substitution + span tracking
+│   │   ├── renderer.py           # L1–L7 frames + placeholder substitution + span tracking
 │   │   ├── post_process.py       # technical_noise transformations
 │   │   ├── compound_builder.py   # L3+ list/heterogeneous (Phase 3, not yet landed)
 │   │   ├── negation.py           # L5 negation scope (Phase 3, not yet landed)
@@ -448,7 +434,6 @@ bioassert/
 ├── tests/
 │   ├── test_config_loader.py
 │   ├── test_config_validator.py
-│   ├── test_patient_sampler.py
 │   ├── test_sampler.py
 │   ├── test_renderer.py
 │   ├── test_post_process.py
@@ -480,14 +465,13 @@ bioassert/
 **Phase 2a — Probabilistic variation layer (Weeks 3–4)**
 - Migrate the three Phase 1 biomarkers from YAML to the `biomarkers.json` + `common_variations.json` schema
 - Pydantic discriminated-union models for `$schema_type` dispatch (weighted_variations, weighted_variations_with_attachment, post_process_transformations)
-- Loader with all 12 validation checks from config_architecture.md Section 7
-- Patient profile sampler + population key cascade lookup
+- Loader with cross-config validation checks from config_architecture.md Section 7
 - Sampler handling `render_constraints.require_biomarker_name_forms` coupling
 - Sampler handling `clone_attribution` Bernoulli attachment
 - Renderer handling placeholder substitution ({gene}, {method}, {result}, {value})
 - Post-process pass applying `technical_noise` transformations
 - Rewritten assertion-preservation tests against new schema
-- **Exit criterion:** 10K records emitted, all preservation tests pass, prevalence hits population-stratified targets within 2σ
+- **Exit criterion:** 10K records emitted, all preservation tests pass, prevalence hits per-biomarker targets within 2σ
 
 **Phase 2b — Full Tier 1 biomarker coverage (Weeks 5–6)**
 - Extend `biomarkers.json` from 3 to all 11 Tier 1 biomarkers (ROS1, BRAF, MET, RET, ERBB2, NTRK, PD-L1, TMB added)

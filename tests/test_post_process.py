@@ -6,7 +6,6 @@ import random
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.post_process import (
     PostProcessedRecord,
     _apply_case,
@@ -103,9 +102,8 @@ def test_apply_technical_noise_end_to_end_preserves_spans(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(42)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(500):
-        rendered = render_l1_record("EGFR", profile, biomarkers, common, rng)
+        rendered = render_l1_record("EGFR", biomarkers, common, rng)
         post = apply_technical_noise(rendered, common, biomarkers, rng)
         for name, (start, end) in post.assertions[0].spans.items():
             assert 0 <= start <= end <= len(post.sentence), (
@@ -123,8 +121,7 @@ def test_post_processed_record_reports_applied_transforms(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
-    rendered = render_l1_record("EGFR", profile, biomarkers, common, rng)
+    rendered = render_l1_record("EGFR", biomarkers, common, rng)
     post = apply_technical_noise(rendered, common, biomarkers, rng)
     assert isinstance(post, PostProcessedRecord)
     expected = {
@@ -156,13 +153,12 @@ def test_clone_span_preserved_under_noise(
 ) -> None:
     """PD-L1 clone attachments survive every noise category with non-empty spans."""
     rng = random.Random(11)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     checked = 0
     attempts = 0
     while checked < 30 and attempts < 800:
         attempts += 1
         rendered = render_l1_record(
-            "PD-L1", profile, biomarkers, common, rng, method_attach_prob=0.0
+            "PD-L1", biomarkers, common, rng, method_attach_prob=0.0
         )
         if rendered.assertions[0].clone_id is None:
             continue
@@ -180,10 +176,9 @@ def test_l2_complexity_level_propagates_through_noise(
 ) -> None:
     """L2 RenderedRecord → PostProcessedRecord preserves complexity_level."""
     rng = random.Random(17)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rendered = render_l1_record(
-            "EGFR", profile, biomarkers, common, rng, complexity_level="L2"
+            "EGFR", biomarkers, common, rng, complexity_level="L2"
         )
         assert rendered.complexity_level == "L2"
         post = apply_technical_noise(rendered, common, biomarkers, rng)

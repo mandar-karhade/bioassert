@@ -27,7 +27,6 @@ import random
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.renderer import (
     AssertionFact,
     L7_ANAPHOR_NOUNS,
@@ -90,10 +89,9 @@ def test_l7_setup_claim_two_sentences_claim_has_span(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(901)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l7_record(
-            list(GENES), profile, biomarkers, common, rng, shape="setup_claim"
+            list(GENES), biomarkers, common, rng, shape="setup_claim"
         )
         assert rec.complexity_level == "L7"
         assert rec.compounding_tier == "low"
@@ -110,10 +108,9 @@ def test_l7_claim_anaphora_two_sentences_claim_first(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(903)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l7_record(
-            list(GENES), profile, biomarkers, common, rng, shape="claim_anaphora"
+            list(GENES), biomarkers, common, rng, shape="claim_anaphora"
         )
         assert rec.complexity_level == "L7"
         assert len(rec.sentences) == 2
@@ -128,10 +125,9 @@ def test_l7_claim_anaphora_second_sentence_carries_anaphor(
     """The anaphor sentence must contain a known anaphor noun from
     ``L7_ANAPHOR_NOUNS``."""
     rng = random.Random(905)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l7_record(
-            list(GENES), profile, biomarkers, common, rng, shape="claim_anaphora"
+            list(GENES), biomarkers, common, rng, shape="claim_anaphora"
         )
         anaphor_sentence = rec.sentences[1]
         assert any(n in anaphor_sentence for n in L7_ANAPHOR_NOUNS), (
@@ -146,10 +142,9 @@ def test_l7_setup_claim_qualifier_three_sentences_claim_middle(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(907)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l7_record(
-            list(GENES), profile, biomarkers, common, rng,
+            list(GENES), biomarkers, common, rng,
             shape="setup_claim_qualifier",
         )
         assert len(rec.sentences) == 3
@@ -162,10 +157,9 @@ def test_l7_qualifier_sentence_carries_anaphor(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(909)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l7_record(
-            list(GENES), profile, biomarkers, common, rng,
+            list(GENES), biomarkers, common, rng,
             shape="setup_claim_qualifier",
         )
         qualifier = rec.sentences[2]
@@ -180,10 +174,9 @@ def test_l7_random_shape_covers_all_three(
 ) -> None:
     """With ``shape=None`` the renderer picks uniformly from the three shapes."""
     rng = random.Random(911)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     shapes_seen: set[str] = set()
     for _ in range(300):
-        rec = render_l7_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l7_record(list(GENES), biomarkers, common, rng)
         fact = rec.assertions[0]
         n = len(rec.sentences)
         if n == 3:
@@ -199,10 +192,9 @@ def test_l7_rejects_unknown_shape(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(913)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(RenderError):
         render_l7_record(
-            list(GENES), profile, biomarkers, common, rng, shape="bogus"
+            list(GENES), biomarkers, common, rng, shape="bogus"
         )
 
 
@@ -217,9 +209,8 @@ def test_l7_sentence_is_join_of_sentences(
     while keeping sentence boundaries explicit.
     """
     rng = random.Random(915)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rec = render_l7_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l7_record(list(GENES), biomarkers, common, rng)
         assert rec.sentence == " ".join(rec.sentences)
 
 
@@ -227,9 +218,8 @@ def test_l7_sentence_index_within_bounds(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(917)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rec = render_l7_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l7_record(list(GENES), biomarkers, common, rng)
         for fact in rec.assertions:
             assert 0 <= fact.sentence_index < len(rec.sentences)
 
@@ -241,9 +231,8 @@ def test_l7_spans_lie_within_referenced_sentence(
     fall entirely inside the character range of ``sentences[sentence_index]``.
     """
     rng = random.Random(919)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
-        rec = render_l7_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l7_record(list(GENES), biomarkers, common, rng)
         # Compute each sentence's byte range inside the joined surface. The
         # joiner is a single space, so sentence k begins at
         # sum(len(s_i)+1 for i<k) and ends at that start + len(s_k).
@@ -265,9 +254,8 @@ def test_l7_every_fact_has_gene_and_status_span(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(921)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rec = render_l7_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l7_record(list(GENES), biomarkers, common, rng)
         for fact in rec.assertions:
             assert "gene" in fact.spans
             assert "status" in fact.spans
@@ -277,9 +265,8 @@ def test_l7_gene_span_surface_is_known_name_form(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(923)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rec = render_l7_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l7_record(list(GENES), biomarkers, common, rng)
         for fact in rec.assertions:
             s, e = fact.spans["gene"]
             surface = rec.sentence[s:e]
@@ -299,12 +286,11 @@ def test_l7_anaphor_vocab_is_exercised(
     surface at least once.
     """
     rng = random.Random(925)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen: set[str] = set()
     for _ in range(1200):
         shape = rng.choice(("claim_anaphora", "setup_claim_qualifier"))
         rec = render_l7_record(
-            list(GENES), profile, biomarkers, common, rng, shape=shape
+            list(GENES), biomarkers, common, rng, shape=shape
         )
         anaphor_sentence = rec.sentences[-1]
         for n in L7_ANAPHOR_NOUNS:
@@ -323,9 +309,8 @@ def test_l7_non_claim_sentences_contain_no_fact_spans(
     labeled fact surfaces — they are pure discourse scaffolding.
     """
     rng = random.Random(927)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
-        rec = render_l7_record(list(GENES), profile, biomarkers, common, rng)
+        rec = render_l7_record(list(GENES), biomarkers, common, rng)
         offsets: list[tuple[int, int]] = []
         cursor = 0
         for i, s in enumerate(rec.sentences):

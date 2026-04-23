@@ -13,7 +13,6 @@ import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
 from bioassert.config.schema import WeightedVariations
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.renderer import (
     RenderedRecord,
     _L3_NAME_FORM_BLOCKLIST,
@@ -55,11 +54,9 @@ def test_l4_shorthand_complexity_level(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(301)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -73,12 +70,10 @@ def test_l4_shorthand_per_gene_statuses_can_diverge(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(307)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen = False
     for _ in range(600):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -100,12 +95,10 @@ def test_l4_shorthand_uses_shorthand_vocab_for_pos_neg(
     """
     pos_vocab, neg_vocab = _shorthand_vocab(common)
     rng = random.Random(311)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     checked = 0
     for _ in range(500):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -129,11 +122,9 @@ def test_l4_shorthand_gene_surfaces_are_bare(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(313)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -151,11 +142,9 @@ def test_l4_shorthand_spans_literal(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(317)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -170,11 +159,9 @@ def test_l4_shorthand_spans_non_overlapping(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(319)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -196,11 +183,9 @@ def test_l4_shorthand_no_variants(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(331)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -216,11 +201,9 @@ def test_l4_shorthand_expression_pool(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(337)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(50):
         rec = render_l4_record(
             list(EXPRESSION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -234,11 +217,9 @@ def test_l4_shorthand_genes_distinct_within_record(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(347)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -252,11 +233,9 @@ def test_l4_shorthand_rejects_invalid_complexity_level(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(Exception):
         render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,

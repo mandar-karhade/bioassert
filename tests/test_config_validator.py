@@ -1,4 +1,4 @@
-"""Cross-config invariants (config_architecture.md §7.5, §7.6, §2.3)."""
+"""Cross-config invariants (config_architecture.md §7.5, §7.6)."""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -10,7 +10,6 @@ from bioassert.config import BiomarkerConfig, CommonConfig, Biomarker
 from bioassert.config.validator import (
     SUPPORTED_PLACEHOLDERS,
     ConfigValidationError,
-    _parse_population_key,
     describe_biomarker_shape,
     validate_configs,
 )
@@ -24,35 +23,6 @@ def test_supported_placeholders_are_exactly_five() -> None:
         "value",
         "variant",
     }
-
-
-def test_parse_population_key_accepts_canonical_order() -> None:
-    assert _parse_population_key("adenocarcinoma") == [
-        ("histology", "adenocarcinoma")
-    ]
-    assert _parse_population_key("adenocarcinoma_east_asian") == [
-        ("histology", "adenocarcinoma"),
-        ("ethnicity", "east_asian"),
-    ]
-    assert _parse_population_key(
-        "adenocarcinoma_east_asian_nonsmoker_younger_female"
-    ) == [
-        ("histology", "adenocarcinoma"),
-        ("ethnicity", "east_asian"),
-        ("smoking", "nonsmoker"),
-        ("age_group", "younger"),
-        ("sex", "female"),
-    ]
-
-
-def test_parse_population_key_rejects_out_of_order() -> None:
-    with pytest.raises(ConfigValidationError):
-        _parse_population_key("adenocarcinoma_younger_nonsmoker")
-
-
-def test_parse_population_key_rejects_non_histology_first() -> None:
-    with pytest.raises(ConfigValidationError):
-        _parse_population_key("east_asian_adenocarcinoma")
 
 
 def test_validate_configs_passes_on_shipped_configs(
@@ -114,19 +84,11 @@ def test_render_constraints_references_known_name_form_keys() -> None:
                         },
                     }
                 },
-                "status_distribution_by_population": {
-                    "adenocarcinoma": {
-                        "positive": 0.1,
-                        "negative": 0.8,
-                        "equivocal": 0.05,
-                        "not_tested": 0.05,
-                    },
-                    "squamous": {
-                        "positive": 0.05,
-                        "negative": 0.85,
-                        "equivocal": 0.05,
-                        "not_tested": 0.05,
-                    },
+                "status_distribution": {
+                    "positive": 0.1,
+                    "negative": 0.8,
+                    "equivocal": 0.05,
+                    "not_tested": 0.05,
                 },
             }
         )
@@ -193,19 +155,11 @@ def _make_minimal_biomarkers_with_value_no_range() -> BiomarkerConfig:
                     },
                 }
             },
-            "status_distribution_by_population": {
-                "adenocarcinoma": {
-                    "positive": 0.1,
-                    "negative": 0.8,
-                    "equivocal": 0.05,
-                    "not_tested": 0.05,
-                },
-                "squamous": {
-                    "positive": 0.05,
-                    "negative": 0.85,
-                    "equivocal": 0.05,
-                    "not_tested": 0.05,
-                },
+            "status_distribution": {
+                "positive": 0.1,
+                "negative": 0.8,
+                "equivocal": 0.05,
+                "not_tested": 0.05,
             },
         }
     )

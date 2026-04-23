@@ -61,17 +61,6 @@ def test_post_process_sub_distributions_sum_to_one(common: CommonConfig) -> None
         )
 
 
-def test_all_biomarkers_have_terminal_fallback_keys(
-    biomarkers: BiomarkerConfig,
-) -> None:
-    for name, entry in biomarkers.biomarkers.items():
-        keys = entry.status_distribution_by_population
-        assert "adenocarcinoma" in keys, (
-            f"{name} missing 'adenocarcinoma' terminal fallback"
-        )
-        assert "squamous" in keys, f"{name} missing 'squamous' terminal fallback"
-
-
 def test_variant_prevalence_sums_to_one(
     biomarkers: BiomarkerConfig,
 ) -> None:
@@ -82,15 +71,15 @@ def test_variant_prevalence_sums_to_one(
         )
 
 
-def test_population_distributions_sum_to_one(
+def test_status_distribution_sums_to_one(
     biomarkers: BiomarkerConfig,
 ) -> None:
     for biomarker_name, entry in biomarkers.biomarkers.items():
-        for key, dist in entry.status_distribution_by_population.items():
-            total = dist.positive + dist.negative + dist.equivocal + dist.not_tested
-            assert abs(total - 1.0) <= WEIGHT_TOLERANCE, (
-                f"{biomarker_name}[{key}] sums to {total}"
-            )
+        dist = entry.status_distribution
+        total = dist.positive + dist.negative + dist.equivocal + dist.not_tested
+        assert abs(total - 1.0) <= WEIGHT_TOLERANCE, (
+            f"{biomarker_name} status_distribution sums to {total}"
+        )
 
 
 def test_variation_keys_match_realization_keys(

@@ -29,10 +29,8 @@ from bioassert.config.schema import (
     WeightedVariations,
 )
 from bioassert.config.validator import SUPPORTED_PLACEHOLDERS
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.sampler import (
     maybe_sample_clone,
-    resolve_population,
     sample_biomarker_name_form,
     sample_measurement_value,
     sample_method,
@@ -467,14 +465,13 @@ def _maybe_sample_method(
 
 def render_l1_record(
     biomarker_name: str,
-    profile: PatientProfile,
     biomarkers: BiomarkerConfig,
     common: CommonConfig,
     rng: random.Random,
     method_attach_prob: float = 0.5,
     complexity_level: str = "L1",
 ) -> RenderedRecord:
-    """Sample + render one record for ``biomarker_name`` under ``profile``.
+    """Sample + render one record for ``biomarker_name``.
 
     Flow mirrors config_architecture.md §3. Supports mutation, fusion,
     composite, and expression biomarkers. For expression biomarkers the
@@ -494,8 +491,7 @@ def render_l1_record(
             f"complexity_level must be 'L1' or 'L2', got {complexity_level!r}"
         )
     biomarker = biomarkers.get(biomarker_name)
-    population = resolve_population(biomarker, profile)
-    status = sample_status(population, rng)
+    status = sample_status(biomarker.status_distribution, rng)
 
     variant: Optional[Variant] = None
     variant_id: Optional[str] = None
@@ -732,7 +728,6 @@ def _coordinate_gene_list(
 
 def render_l3_record(
     biomarker_pool: list[str],
-    profile: PatientProfile,
     biomarkers: BiomarkerConfig,
     common: CommonConfig,
     rng: random.Random,
@@ -776,8 +771,7 @@ def render_l3_record(
 
     gene_names: list[str] = rng.sample(biomarker_pool, n)
     first_biomarker = biomarkers.get(gene_names[0])
-    population = resolve_population(first_biomarker, profile)
-    status = sample_status(population, rng)
+    status = sample_status(first_biomarker.status_distribution, rng)
 
     gene_surfaces: list[str] = []
     for name in gene_names:
@@ -902,7 +896,6 @@ def _render_l3_shorthand(
 
 def render_l4_record(
     biomarker_pool: list[str],
-    profile: PatientProfile,
     biomarkers: BiomarkerConfig,
     common: CommonConfig,
     rng: random.Random,
@@ -954,8 +947,7 @@ def render_l4_record(
 
     for name in gene_names:
         b = biomarkers.get(name)
-        population = resolve_population(b, profile)
-        status = sample_status(population, rng)
+        status = sample_status(b.status_distribution, rng)
         form_id = _bare_gene_name_form(b, rng)
         gene_surface = b.name_forms.realizations[form_id]
         _, raw = _sample_status_phrase(
@@ -1101,7 +1093,6 @@ def _l4_joiner(
 
 def render_l5_record(
     biomarker_pool: list[str],
-    profile: PatientProfile,
     biomarkers: BiomarkerConfig,
     common: CommonConfig,
     rng: random.Random,
@@ -1424,7 +1415,6 @@ def _pick_contrast_statuses(rng: random.Random) -> tuple[str, str]:
 
 def render_l6_record(
     biomarker_pool: list[str],
-    profile: PatientProfile,
     biomarkers: BiomarkerConfig,
     common: CommonConfig,
     rng: random.Random,
@@ -1444,13 +1434,10 @@ def render_l6_record(
 
     ``shape=None`` selects uniformly from :data:`L6_SHAPES`. Records stamp
     ``complexity_level="L6"`` and ``compounding_tier="low"`` (tier knob
-    doesn't apply at single-gene level).
-
-    ``profile`` is accepted for signature parity with other renderers but
-    unused — L6 contrast statuses are drawn directly from a fixed
-    positive/negative pair to guarantee divergence.
+    doesn't apply at single-gene level). L6 contrast statuses are drawn
+    directly from a fixed positive/negative pair to guarantee divergence,
+    independent of the biomarker's flat status_distribution.
     """
-    del profile  # reserved for parity; see docstring
     if shape is None:
         shape = rng.choice(L6_SHAPES)
     if shape not in L6_SHAPES:
@@ -2017,7 +2004,6 @@ def _assemble_l7_record(
 
 def render_l7_record(
     biomarker_pool: list[str],
-    profile: PatientProfile,
     biomarkers: BiomarkerConfig,
     common: CommonConfig,
     rng: random.Random,

@@ -18,7 +18,6 @@ import random
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.renderer import (
     COMPOUND_HIGH_MAX,
     COMPOUND_HIGH_MIN,
@@ -91,11 +90,9 @@ def test_l3_low_tier_renders_two_genes(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(701)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(50):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -109,12 +106,10 @@ def test_l3_high_tier_renders_three_to_eight_genes(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(703)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     observed_sizes: set[int] = set()
     for _ in range(300):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -131,11 +126,9 @@ def test_l3s_high_tier_renders_three_to_eight_genes(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(707)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -151,10 +144,9 @@ def test_l3_default_tier_is_low(
 ) -> None:
     """Calling render_l3_record without a tier defaults to 'low' (2 genes)."""
     rng = random.Random(709)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(50):
         rec = render_l3_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         assert rec.compounding_tier == "low"
         assert len(rec.assertions) == 2
@@ -167,11 +159,9 @@ def test_l4_low_tier_renders_two_genes(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(711)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(50):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -185,12 +175,10 @@ def test_l4_high_tier_renders_three_to_eight_genes(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(713)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     observed: set[int] = set()
     for _ in range(300):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -205,11 +193,9 @@ def test_l4s_high_tier_renders_three_to_eight_genes(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(719)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l4_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -229,11 +215,9 @@ def test_l5_low_tier_renders_small_wide_scope(
     Panel-wide frames always produce 1 fact regardless of tier.
     """
     rng = random.Random(721)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l5_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -252,12 +236,10 @@ def test_l5_high_tier_renders_expanded_wide_scope(
     permitting). Panel-wide frames ignore tier (1 fact always).
     """
     rng = random.Random(723)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen_enumerated = 0
     for _ in range(200):
         rec = render_l5_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -283,12 +265,10 @@ def test_high_tier_cross_class_pool_l3(
     The renderer does not enforce pool homogeneity.
     """
     rng = random.Random(731)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen_mixed = False
     for _ in range(50):
         rec = render_l3_record(
             list(MIXED_POOL),
-            profile,
             biomarkers,
             common,
             rng,
@@ -311,11 +291,9 @@ def test_renderer_rejects_unknown_tier(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(741)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(Exception):
         render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -328,11 +306,9 @@ def test_renderer_rejects_medium_tier(
 ) -> None:
     """Medium was collapsed into high per user feedback 2026-04-23."""
     rng = random.Random(742)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(Exception):
         render_l3_record(
             list(MUTATION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,
@@ -347,12 +323,10 @@ def test_high_tier_tolerates_small_pool(
     erroring — the caller is not forced to have >=5 biomarkers available.
     """
     rng = random.Random(743)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     small_pool = ["EGFR", "KRAS", "BRAF"]
     for _ in range(30):
         rec = render_l3_record(
             small_pool,
-            profile,
             biomarkers,
             common,
             rng,

@@ -1,15 +1,10 @@
 """Generator modules: assertion sampling, grammar rendering, adversarial records.
 
-Phase 2a additions: :mod:`patient_sampler`, :mod:`sampler`, :mod:`renderer`,
-:mod:`post_process` — the probability-weighted pipeline driven by the JSON
-configs in :mod:`bioassert.config`.
+The probability-weighted pipeline driven by the JSON configs in
+:mod:`bioassert.config`. Status distributions are flat per biomarker for
+the cohort described by ``biomarkers.json`` — no patient-profile
+conditioning.
 """
-from bioassert.generator.patient_sampler import (
-    PatientProfile,
-    PopulationCascadeMiss,
-    resolve_status_distribution,
-    sample_patient_profile,
-)
 from bioassert.generator.post_process import (
     PostProcessError,
     PostProcessedRecord,
@@ -23,7 +18,6 @@ from bioassert.generator.renderer import (
 from bioassert.generator.sampler import (
     STATUS_NAMES,
     maybe_sample_clone,
-    resolve_population,
     sample_biomarker_name_form,
     sample_measurement_value,
     sample_method,
@@ -33,8 +27,6 @@ from bioassert.generator.sampler import (
 )
 
 __all__ = [
-    "PatientProfile",
-    "PopulationCascadeMiss",
     "PostProcessError",
     "PostProcessedRecord",
     "RenderError",
@@ -43,12 +35,9 @@ __all__ = [
     "apply_technical_noise",
     "maybe_sample_clone",
     "render_l1_record",
-    "resolve_population",
-    "resolve_status_distribution",
     "sample_biomarker_name_form",
     "sample_measurement_value",
     "sample_method",
-    "sample_patient_profile",
     "sample_status",
     "sample_variant",
     "sample_variation",

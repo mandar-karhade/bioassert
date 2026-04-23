@@ -15,7 +15,6 @@ import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
 from bioassert.config.schema import WeightedVariations
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.renderer import (
     RenderedRecord,
     _L3_NAME_FORM_BLOCKLIST,
@@ -71,10 +70,9 @@ def test_l4_record_has_n_assertions(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(201)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         assert isinstance(rec, RenderedRecord)
         n = len(rec.assertions)
@@ -90,11 +88,10 @@ def test_l4_per_gene_statuses_can_diverge(
     share the same status value.
     """
     rng = random.Random(211)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen_divergent = False
     for _ in range(500):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         statuses = {a.status for a in rec.assertions}
         if len(statuses) > 1:
@@ -107,10 +104,9 @@ def test_l4_every_fact_has_gene_and_status_span(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(223)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             assert "gene" in fact.spans
@@ -125,10 +121,9 @@ def test_l4_spans_literal_substrings(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(227)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             gs, ge = fact.spans["gene"]
@@ -142,10 +137,9 @@ def test_l4_gene_surfaces_are_bare(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(229)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(400):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             s, e = fact.spans["gene"]
@@ -159,10 +153,9 @@ def test_l4_spans_non_overlapping_within_record(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(233)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         all_spans: list[tuple[int, int, str]] = []
         for fact in rec.assertions:
@@ -181,10 +174,9 @@ def test_l4_gene_order_in_sentence_matches_fact_order(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(239)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         starts = [fact.spans["gene"][0] for fact in rec.assertions]
         assert starts == sorted(starts)
@@ -194,10 +186,9 @@ def test_l4_no_variants(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(241)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             assert fact.variant_id is None
@@ -209,10 +200,9 @@ def test_l4_genes_distinct_within_record(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(251)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         genes = [fact.gene for fact in rec.assertions]
         assert len(genes) == len(set(genes))
@@ -222,10 +212,9 @@ def test_l4_expression_pool_only_supports_n2(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(257)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(50):
         rec = render_l4_record(
-            list(EXPRESSION_BIOMARKERS), profile, biomarkers, common, rng
+            list(EXPRESSION_BIOMARKERS), biomarkers, common, rng
         )
         assert len(rec.assertions) == 2
         assert {f.gene for f in rec.assertions} == set(EXPRESSION_BIOMARKERS)
@@ -235,9 +224,8 @@ def test_l4_rejects_pool_smaller_than_two(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(Exception):
-        render_l4_record(["EGFR"], profile, biomarkers, common, rng)
+        render_l4_record(["EGFR"], biomarkers, common, rng)
 
 
 def test_l4_status_spans_are_distinct_per_fact(
@@ -248,10 +236,9 @@ def test_l4_status_spans_are_distinct_per_fact(
     span.
     """
     rng = random.Random(263)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         spans = [fact.spans["status"] for fact in rec.assertions]
         assert len(set(spans)) == len(spans), (
@@ -264,10 +251,9 @@ def test_l4_frame_template_recorded(
 ) -> None:
     """Stores some non-empty frame template string for downstream analysis."""
     rng = random.Random(271)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(50):
         rec = render_l4_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         assert rec.frame_template
         assert "{gene}" in rec.frame_template

@@ -15,7 +15,6 @@ import random
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import PatientProfile
 from bioassert.generator.renderer import (
     AssertionFact,
     RenderedRecord,
@@ -64,10 +63,9 @@ def test_l5_record_structure(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(401)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         assert isinstance(rec, RenderedRecord)
         assert rec.complexity_level == "L5"
@@ -82,11 +80,10 @@ def test_l5_enumerated_has_at_least_two_negation_wide(
     frames emit 0 wide facts (implicit scope), so they are excluded here.
     """
     rng = random.Random(409)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen_enumerated = 0
     for _ in range(200):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         wide = [f for f in rec.assertions if f.polarity_scope == "negation_wide"]
         if not wide:
@@ -103,10 +100,9 @@ def test_l5_negation_wide_facts_are_all_negative(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(419)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             if fact.polarity_scope == "negation_wide":
@@ -120,10 +116,9 @@ def test_l5_negation_wide_facts_share_status_span(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(421)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         wide_status_spans = {
             f.spans["status"]
@@ -145,11 +140,10 @@ def test_l5_exception_appears_sometimes(
     see at least one record in 200 samples with an exception fact.
     """
     rng = random.Random(431)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen_exception = False
     for _ in range(200):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         if any(f.polarity_scope == "exception" for f in rec.assertions):
             seen_exception = True
@@ -164,11 +158,10 @@ def test_l5_exception_facts_carry_own_status_span(
     shared negation_wide scope span.
     """
     rng = random.Random(433)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     checked = 0
     for _ in range(400):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         exceptions = [
             f for f in rec.assertions if f.polarity_scope == "exception"
@@ -194,10 +187,9 @@ def test_l5_gene_surfaces_are_bare(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(439)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             s, e = fact.spans["gene"]
@@ -212,10 +204,9 @@ def test_l5_spans_literal_substrings(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(443)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(300):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             for name, (s, e) in fact.spans.items():
@@ -232,10 +223,9 @@ def test_l5_gene_spans_disjoint_and_status_does_not_cross_genes(
     wide-scope or per-exception) must not overlap any gene span.
     """
     rng = random.Random(449)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         gene_spans = sorted(fact.spans["gene"] for fact in rec.assertions)
         for i in range(1, len(gene_spans)):
@@ -255,10 +245,9 @@ def test_l5_gene_order_matches_fact_order(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(457)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(100):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         starts = [fact.spans["gene"][0] for fact in rec.assertions]
         assert starts == sorted(starts)
@@ -268,10 +257,9 @@ def test_l5_genes_distinct_within_record(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(461)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(200):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         genes = [fact.gene for fact in rec.assertions]
         assert len(genes) == len(set(genes))
@@ -286,7 +274,6 @@ def test_l5_scope_marker_visible_in_sentence(
     genes, so the precedence check is skipped for them.
     """
     rng = random.Random(463)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     enum_markers = {
         f["scope_marker"] for f in _L5_FRAMES if f["kind"] == "enumerated"
     }
@@ -295,7 +282,7 @@ def test_l5_scope_marker_visible_in_sentence(
     }
     for _ in range(100):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         starts_with_marker = any(
             rec.sentence.startswith(m) for m in enum_markers
@@ -322,11 +309,10 @@ def test_l5_exception_gene_follows_wide_genes(
     when no wide facts exist in the record.
     """
     rng = random.Random(467)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     checked = 0
     for _ in range(400):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         wide_ends = [
             f.spans["gene"][1] for f in rec.assertions
@@ -355,11 +341,10 @@ def test_l5_panel_wide_produces_single_exception_fact(
     wide facts — because the wide scope is an implicit panel.
     """
     rng = random.Random(487)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     checked = 0
     for _ in range(500):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         has_panel_prefix = any(
             rec.sentence.startswith(f["scope"])
@@ -388,11 +373,10 @@ def test_l5_panel_wide_surface_contains_other_than(
     marker in the rendered sentence.
     """
     rng = random.Random(491)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     checked = 0
     for _ in range(500):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         has_panel_prefix = any(
             rec.sentence.startswith(f["scope"])
@@ -417,10 +401,9 @@ def test_l5_clinical_markers_only(
     reports per user feedback 2026-04-23).
     """
     rng = random.Random(499)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(500):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         # These tokens should never appear as exception connectors in L5.
         # "but" as a whole word, "however" as a whole word.
@@ -441,12 +424,11 @@ def test_l5_none_exception_is_dominant(
     (frame mix currently targets ~50% None from enumerated frames alone).
     """
     rng = random.Random(503)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     no_exception = 0
     total = 500
     for _ in range(total):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         has_exception = any(
             f.polarity_scope == "exception" for f in rec.assertions
@@ -465,11 +447,10 @@ def test_l5_except_and_other_than_are_positive(
     exception clauses always carry positive status on the trailing fact.
     """
     rng = random.Random(509)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     seen = 0
     for _ in range(1000):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         if " except " not in rec.sentence and "other than" not in rec.sentence:
             continue
@@ -495,11 +476,10 @@ def test_l5_and_exception_is_negative(
     of exactly one negative exception fact.
     """
     rng = random.Random(521)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     negative_exceptions = 0
     for _ in range(1000):
         rec = render_l5_record(
-            list(MUTATION_BIOMARKERS), profile, biomarkers, common, rng
+            list(MUTATION_BIOMARKERS), biomarkers, common, rng
         )
         for fact in rec.assertions:
             if fact.polarity_scope == "exception" and fact.status == "negative":
@@ -513,20 +493,17 @@ def test_l5_rejects_pool_smaller_than_two(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     with pytest.raises(Exception):
-        render_l5_record(["EGFR"], profile, biomarkers, common, rng)
+        render_l5_record(["EGFR"], biomarkers, common, rng)
 
 
 def test_l5_expression_pool_supported(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(479)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     for _ in range(50):
         rec = render_l5_record(
             list(EXPRESSION_BIOMARKERS),
-            profile,
             biomarkers,
             common,
             rng,

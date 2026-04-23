@@ -1,4 +1,4 @@
-"""End-to-end label preservation for the Phase 2a pipeline.
+"""End-to-end label preservation for the rendering pipeline.
 
 Every record emitted by the full pipeline (render → technical_noise) must
 satisfy Non-Negotiable #1: the gene / variant / method / status spans
@@ -12,10 +12,6 @@ import random
 import pytest
 
 from bioassert.config import BiomarkerConfig, CommonConfig
-from bioassert.generator.patient_sampler import (
-    PatientProfile,
-    sample_patient_profile,
-)
 from bioassert.generator.post_process import (
     PostProcessedRecord,
     apply_technical_noise,
@@ -43,15 +39,14 @@ N_RECORDS = 1000
 
 def _emit_records(
     n: int, common: CommonConfig, biomarkers: BiomarkerConfig, seed: int
-) -> list[tuple[PatientProfile, PostProcessedRecord]]:
+) -> list[PostProcessedRecord]:
     rng = random.Random(seed)
-    emitted: list[tuple[PatientProfile, PostProcessedRecord]] = []
-    for i in range(n):
-        profile = sample_patient_profile(f"p{i:05d}", rng)
+    emitted: list[PostProcessedRecord] = []
+    for _ in range(n):
         gene = rng.choice(PANEL_BIOMARKERS)
-        rendered = render_l1_record(gene, profile, biomarkers, common, rng)
+        rendered = render_l1_record(gene, biomarkers, common, rng)
         post = apply_technical_noise(rendered, common, biomarkers, rng)
-        emitted.append((profile, post))
+        emitted.append(post)
     return emitted
 
 
@@ -59,7 +54,7 @@ def test_every_span_resolves_to_non_empty_substring(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     records = _emit_records(N_RECORDS, common, biomarkers, seed=2024)
-    for _, rec in records:
+    for rec in records:
         for name, (start, end) in rec.assertions[0].spans.items():
             assert 0 <= start < end <= len(rec.sentence), (
                 f"span {name} out of bounds in {rec.sentence!r}: ({start},{end})"
@@ -73,7 +68,7 @@ def test_spans_never_overlap_each_other(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     records = _emit_records(N_RECORDS, common, biomarkers, seed=99)
-    for _, rec in records:
+    for rec in records:
         sorted_spans = sorted(rec.assertions[0].spans.items(), key=lambda kv: kv[1])
         for i in range(1, len(sorted_spans)):
             prev_name, (_, prev_end) = sorted_spans[i - 1]
@@ -91,7 +86,7 @@ def test_gene_surface_is_known_name_form_when_untransformed(
     """
     records = _emit_records(N_RECORDS, common, biomarkers, seed=17)
     checked = 0
-    for _, rec in records:
+    for rec in records:
         if rec.applied_transforms.get("hyphenation_gene_names") != "canonical":
             continue
         if rec.applied_transforms.get("case_variation") != "canonical":
@@ -130,7 +125,7 @@ def test_status_surface_reflects_status_label(
     }
 
     records = _emit_records(N_RECORDS, common, biomarkers, seed=3)
-    for _, rec in records:
+    for rec in records:
         if rec.applied_transforms.get("case_variation") != "canonical":
             continue
         start, end = rec.assertions[0].spans["status"]
@@ -152,7 +147,7 @@ def test_sentence_is_non_empty_and_printable(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     records = _emit_records(N_RECORDS, common, biomarkers, seed=55)
-    for _, rec in records:
+    for rec in records:
         assert rec.sentence.strip(), "empty rendered sentence"
         for ch in rec.sentence:
             assert ch.isprintable() or ch in "\t\n", (
@@ -166,8 +161,7 @@ def test_deterministic_with_same_seed(
     """Same seed ⇒ identical corpus."""
     a = _emit_records(200, common, biomarkers, seed=7)
     b = _emit_records(200, common, biomarkers, seed=7)
-    for (p1, r1), (p2, r2) in zip(a, b):
-        assert p1 == p2
+    for r1, r2 in zip(a, b):
         assert r1.sentence == r2.sentence
         assert r1.assertions[0].spans == r2.assertions[0].spans
         assert r1.assertions[0].status == r2.assertions[0].status
@@ -186,7 +180,7 @@ def test_applied_transforms_populated_for_every_record(
         "pdf_artifact",
         "abbreviation_inconsistency",
     }
-    for _, rec in records:
+    for rec in records:
         assert set(rec.applied_transforms.keys()) == required
 
 
@@ -194,10 +188,9 @@ def test_canonical_transforms_leave_sentence_identical_to_render(
     common: CommonConfig, biomarkers: BiomarkerConfig
 ) -> None:
     rng = random.Random(0)
-    profile = PatientProfile(patient_ref="p", histology="adenocarcinoma")
     matched = 0
-    for i in range(2000):
-        rendered = render_l1_record("EGFR", profile, biomarkers, common, rng)
+    for _ in range(2000):
+        rendered = render_l1_record("EGFR", biomarkers, common, rng)
         post = apply_technical_noise(rendered, common, biomarkers, rng)
         if all(
             post.applied_transforms[k]
