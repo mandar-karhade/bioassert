@@ -83,16 +83,20 @@ class AssertionFact:
 class RenderedRecord:
     """One rendered sentence + the assertion facts it carries.
 
-    L1/L2 records have exactly one fact; L3+ will carry a tuple of facts. The
-    tuple ordering follows the order in which genes appear in the surface
-    sentence. ``complexity_level`` is ``"L1"`` / ``"L2"`` (Phase 2b); L3+
-    values land in later sub-phases.
+    L1/L2 records have exactly one fact; L3+ carries a tuple of facts
+    whose order follows the gene order in the surface sentence.
+    ``compounding_tier`` is orthogonal to ``complexity_level`` — it
+    parameterizes how many genes participate in a compound record
+    (``"low"`` = 2 genes, ``"high"`` = 3-8 genes clamped to pool size).
+    L1/L2 single-gene records inherit the default ``"low"`` but the
+    tier is only meaningful at L3+.
     """
 
     sentence: str
     assertions: tuple[AssertionFact, ...]
     frame_template: str
     complexity_level: str = "L1"
+    compounding_tier: str = "low"
 
 
 _L1_FRAMES: list[dict] = [
@@ -219,6 +223,35 @@ L5_MAX_WIDE = 4
 L3_MIN_N = 2
 L3_MAX_N = 4
 L3_OXFORD_PROB = 0.6
+
+# Compounding tier bounds — controls how many genes participate in an
+# L3+ compound record. Orthogonal to complexity_level (which picks the
+# frame family). Per user direction 2026-04-23: only two tiers. "low"
+# pins to the minimum compound size (< 3 genes, i.e., exactly 2);
+# "high" covers 3+ genes (3-8, clamped to pool size), typically paired
+# with a cross-class pool + multi-sentence emergence via L4 ". " frames.
+COMPOUND_LOW_N = 2
+COMPOUND_HIGH_MIN = 3
+COMPOUND_HIGH_MAX = 8
+
+_TIER_RANGES: dict[str, tuple[int, int]] = {
+    "low": (COMPOUND_LOW_N, COMPOUND_LOW_N),
+    "high": (COMPOUND_HIGH_MIN, COMPOUND_HIGH_MAX),
+}
+
+
+def n_range_for_tier(tier: str) -> tuple[int, int]:
+    """Return the ``(min_n, max_n)`` gene-count range for ``tier``.
+
+    Raises :class:`RenderError` when ``tier`` is not ``"low"`` or
+    ``"high"``.
+    """
+    if tier not in _TIER_RANGES:
+        raise RenderError(
+            f"compounding_tier must be one of "
+            f"{sorted(_TIER_RANGES)}, got {tier!r}"
+        )
+    return _TIER_RANGES[tier]
 
 VARIANT_FRAME_PROB = 0.55
 METHOD_FRAME_PROB = 0.35
@@ -692,13 +725,15 @@ def render_l3_record(
     rng: random.Random,
     n: Optional[int] = None,
     complexity_level: str = "L3",
+    compounding_tier: str = "low",
 ) -> RenderedRecord:
     """Render one L3 record: N genes share one status.
 
-    Samples N distinct genes from ``biomarker_pool`` (N ∈ [L3_MIN_N, L3_MAX_N],
-    capped at pool size), draws one shared status from the first gene's resolved
-    population, and renders either a prose frame (``complexity_level="L3"``) or
-    a shorthand/tabular frame (``complexity_level="L3S"``).
+    Samples N distinct genes from ``biomarker_pool`` (N range controlled by
+    ``compounding_tier`` via :func:`n_range_for_tier`, capped at pool size),
+    draws one shared status from the first gene's resolved population, and
+    renders either a prose frame (``complexity_level="L3"``) or a shorthand/
+    tabular frame (``complexity_level="L3S"``).
 
     Prose: all facts share one status span (coordinator gene list + single
     formal status phrase). Shorthand: each fact gets its own status span
@@ -706,22 +741,25 @@ def render_l3_record(
 
     L3 never emits variant descriptors or method slots — those land in L4/L5.
     The caller is responsible for keeping the pool homogeneous
-    (mutation-class vs expression-class); the renderer does not enforce this.
+    (mutation-class vs expression-class) for medium/low tiers; high tier is
+    explicitly allowed to mix classes. The renderer does not enforce this.
     """
     if complexity_level not in ("L3", "L3S"):
         raise RenderError(
             f"complexity_level must be 'L3' or 'L3S', got {complexity_level!r}"
         )
+    tier_min, tier_max = n_range_for_tier(compounding_tier)
     pool_size = len(biomarker_pool)
     if pool_size < L3_MIN_N:
         raise RenderError(
             f"L3 pool needs >= {L3_MIN_N} biomarkers, got {pool_size}"
         )
-    max_n = min(L3_MAX_N, pool_size)
+    min_n = min(tier_min, pool_size)
+    max_n = min(tier_max, pool_size)
     if n is None:
-        n = rng.randint(L3_MIN_N, max_n)
-    elif not L3_MIN_N <= n <= max_n:
-        raise RenderError(f"n must be in [{L3_MIN_N}, {max_n}], got {n}")
+        n = rng.randint(min_n, max_n)
+    elif not min_n <= n <= max_n:
+        raise RenderError(f"n must be in [{min_n}, {max_n}], got {n}")
 
     gene_names: list[str] = rng.sample(biomarker_pool, n)
     first_biomarker = biomarkers.get(gene_names[0])
@@ -736,7 +774,8 @@ def render_l3_record(
 
     if complexity_level == "L3S":
         return _render_l3_shorthand(
-            gene_names, gene_surfaces, status, common, rng
+            gene_names, gene_surfaces, status, common, rng,
+            compounding_tier=compounding_tier,
         )
 
     gene_list_surface, gene_positions_in_list = _coordinate_gene_list(
@@ -777,6 +816,7 @@ def render_l3_record(
         assertions=tuple(assertions),
         frame_template=frame["template"],
         complexity_level="L3",
+        compounding_tier=compounding_tier,
     )
 
 
@@ -786,6 +826,7 @@ def _render_l3_shorthand(
     status: str,
     common: CommonConfig,
     rng: random.Random,
+    compounding_tier: str = "low",
 ) -> RenderedRecord:
     """Build the shorthand/tabular L3 surface with distributive status spans.
 
@@ -842,6 +883,7 @@ def _render_l3_shorthand(
         assertions=tuple(assertions),
         frame_template=frame_template,
         complexity_level="L3S",
+        compounding_tier=compounding_tier,
     )
 
 
@@ -853,14 +895,16 @@ def render_l4_record(
     rng: random.Random,
     n: Optional[int] = None,
     complexity_level: str = "L4",
+    compounding_tier: str = "low",
 ) -> RenderedRecord:
     """Render one L4 record: N genes, each with its own independently
     drawn status.
 
-    Samples N distinct genes (N ∈ [L3_MIN_N, L3_MAX_N], capped at pool size),
-    draws one status per gene from the gene's resolved population, and glues
-    the pairs into a single surface. Each :class:`AssertionFact` carries its
-    own gene span AND its own status span — statuses may diverge.
+    Samples N distinct genes (N range from :func:`n_range_for_tier` using
+    ``compounding_tier``, capped at pool size), draws one status per gene
+    from the gene's resolved population, and glues the pairs into a single
+    surface. Each :class:`AssertionFact` carries its own gene span AND its
+    own status span — statuses may diverge.
 
     ``complexity_level="L4"`` renders formal prose frames (:data:`_L4_FRAMES`
     — ``positive_phrases``/``negation_phrases`` vocab + optional Oxford
@@ -868,23 +912,26 @@ def render_l4_record(
     (:data:`_L4_SHORTHAND_FRAMES` — ``positive_shorthand``/
     ``negation_shorthand`` vocab, compact separators, no coordinator).
 
-    Variant descriptors and method slots are deferred to L5+. The caller is
-    responsible for pool homogeneity (mutation-class vs expression-class).
+    Variant descriptors and method slots are deferred to L5+. High tier
+    ("high") is explicitly allowed to mix classes (mutation + expression)
+    in the pool; medium/low tiers should be kept homogeneous by the caller.
     """
     if complexity_level not in ("L4", "L4S"):
         raise RenderError(
             f"complexity_level must be 'L4' or 'L4S', got {complexity_level!r}"
         )
+    tier_min, tier_max = n_range_for_tier(compounding_tier)
     pool_size = len(biomarker_pool)
     if pool_size < L3_MIN_N:
         raise RenderError(
             f"L4 pool needs >= {L3_MIN_N} biomarkers, got {pool_size}"
         )
-    max_n = min(L3_MAX_N, pool_size)
+    min_n = min(tier_min, pool_size)
+    max_n = min(tier_max, pool_size)
     if n is None:
-        n = rng.randint(L3_MIN_N, max_n)
-    elif not L3_MIN_N <= n <= max_n:
-        raise RenderError(f"n must be in [{L3_MIN_N}, {max_n}], got {n}")
+        n = rng.randint(min_n, max_n)
+    elif not min_n <= n <= max_n:
+        raise RenderError(f"n must be in [{min_n}, {max_n}], got {n}")
 
     gene_names: list[str] = rng.sample(biomarker_pool, n)
     status_phrase_level = "L1" if complexity_level == "L4" else "L2"
@@ -908,7 +955,8 @@ def render_l4_record(
 
     if complexity_level == "L4S":
         return _render_l4_shorthand(
-            gene_names, gene_surfaces, statuses, status_surfaces, rng
+            gene_names, gene_surfaces, statuses, status_surfaces, rng,
+            compounding_tier=compounding_tier,
         )
 
     frame = rng.choice(_L4_FRAMES)
@@ -957,6 +1005,7 @@ def render_l4_record(
         assertions=tuple(assertions),
         frame_template=frame_template,
         complexity_level="L4",
+        compounding_tier=compounding_tier,
     )
 
 
@@ -966,6 +1015,7 @@ def _render_l4_shorthand(
     statuses: list[str],
     status_surfaces: list[str],
     rng: random.Random,
+    compounding_tier: str = "low",
 ) -> RenderedRecord:
     """Glue per-gene (gene, status) shorthand pairs into one surface.
 
@@ -1014,6 +1064,7 @@ def _render_l4_shorthand(
         assertions=tuple(assertions),
         frame_template=frame_template,
         complexity_level="L4S",
+        compounding_tier=compounding_tier,
     )
 
 
@@ -1042,14 +1093,21 @@ def render_l5_record(
     common: CommonConfig,
     rng: random.Random,
     n_wide: Optional[int] = None,
+    compounding_tier: str = "low",
 ) -> RenderedRecord:
     """Render one L5 negation-scope record.
+
+    ``compounding_tier`` drives ``n_wide`` via :func:`n_range_for_tier`
+    (capped at pool size). Panel-wide frames ignore the tier since they
+    always yield one labeled fact. The caller is responsible for keeping
+    the pool homogeneous (mutation vs expression) except in the high tier
+    where cross-class mixing is explicitly allowed.
 
     Two structural frame kinds:
 
     - ``"enumerated"``: a scope marker ("No" / "Absence of") negates a list
-      of N genes wide (``N_wide ∈ [L5_MIN_WIDE, L5_MAX_WIDE]``). All wide
-      facts share one status span on the scope marker and carry
+      of N genes wide (``N_wide ∈ tier range``). All wide facts share one
+      status span on the scope marker and carry
       ``polarity_scope="negation_wide"`` with status ``"negative"``. An
       optional exception clause ("and" continuation with same negative
       polarity, or "except" flip to positive) adds one trailing gene with
@@ -1060,10 +1118,7 @@ def render_l5_record(
       on the panel was positive"); no genes are enumerated, so no
       wide-scope facts are emitted. One trailing gene after "other than"
       becomes the sole fact with ``polarity_scope="exception"`` and status
-      set to the frame's ``status_word`` (the polarity the panel lacked).
-
-    The caller is responsible for keeping the pool homogeneous
-    (mutation-class vs expression-class); the renderer does not enforce this.
+      set to the frame's ``status_word``.
     """
     pool_size = len(biomarker_pool)
     if pool_size < L5_MIN_WIDE:
@@ -1073,19 +1128,28 @@ def render_l5_record(
 
     frame = rng.choice(_L5_FRAMES)
     if frame["kind"] == "panel_wide":
-        return _render_l5_panel_wide(frame, biomarker_pool, biomarkers, rng)
+        return _render_l5_panel_wide(
+            frame,
+            biomarker_pool,
+            biomarkers,
+            rng,
+            compounding_tier=compounding_tier,
+        )
 
     scope_marker: str = frame["scope_marker"]
     neg_noun: str = frame["neg_noun"]
     exception_marker: Optional[str] = frame["exception_marker"]
     exception_status: Optional[str] = frame["exception_status"]
 
-    max_wide = min(L5_MAX_WIDE, pool_size)
+    tier_min, tier_max = n_range_for_tier(compounding_tier)
+    min_wide = min(tier_min, pool_size)
+    max_wide = min(tier_max, pool_size)
     if n_wide is None:
-        n_wide = rng.randint(L5_MIN_WIDE, max_wide)
-    elif not L5_MIN_WIDE <= n_wide <= max_wide:
+        n_wide = rng.randint(min_wide, max_wide)
+    elif not min_wide <= n_wide <= max_wide:
         raise RenderError(
-            f"n_wide must be in [{L5_MIN_WIDE}, {max_wide}], got {n_wide}"
+            f"n_wide must be in [{min_wide}, {max_wide}] for tier "
+            f"{compounding_tier!r} and pool size {pool_size}, got {n_wide}"
         )
 
     has_exception = exception_marker is not None and pool_size > n_wide
@@ -1197,6 +1261,7 @@ def render_l5_record(
         assertions=tuple(assertions),
         frame_template=frame_template,
         complexity_level="L5",
+        compounding_tier=compounding_tier,
     )
 
 
@@ -1205,6 +1270,7 @@ def _render_l5_panel_wide(
     biomarker_pool: list[str],
     biomarkers: BiomarkerConfig,
     rng: random.Random,
+    compounding_tier: str = "low",
 ) -> RenderedRecord:
     """Render a panel-wide L5 record: implicit panel scope, one exception.
 
@@ -1260,4 +1326,5 @@ def _render_l5_panel_wide(
         assertions=(fact,),
         frame_template=frame_template,
         complexity_level="L5",
+        compounding_tier=compounding_tier,
     )
