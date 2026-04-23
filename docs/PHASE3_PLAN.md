@@ -154,15 +154,29 @@ Parallel to 3.3 — shorthand form of heterogeneous multi-gene. `EGFR +, ALK -, 
 
 **Why:** addresses `known_issues.md` Bug 3a (whitespace noise inside L1 prose) and extends Layer 5 per the spec's Section 3 Layer 5.
 
-**Scope:**
-- Fix Bug 3a: restrict whitespace substitution to slot-boundary positions (tracked via `_render_with_spans`), never interior spaces.
-- Add OCR-style corruption (optional — configurable).
-- Add PDF-extraction artifacts (hyphen-newline line breaks within tokens).
-- Abbreviation inconsistency within a single record.
+**Scope (shipped):**
+- Fix Bug 3a: whitespace substitutions (`tab`, `newline_mid_sentence`, `double_space`) restricted to slot-boundary space positions only (`_slot_boundary_space_positions`). Prose-interior substitutions no longer occur.
+- Add OCR-style corruption: new `ocr_corruption` sub-category with `canonical`/`light`/`moderate` modes. Length-preserving char swaps (`l`↔`1`, `O`↔`0`, `S`↔`5`, `B`↔`8`, `Z`↔`2`, `I`↔`l`) applied only outside labeled spans.
+- Add PDF hyphen-break artifact: new `pdf_artifact` sub-category with `canonical`/`hyphen_linebreak` modes. Inserts `-\n` inside a non-labeled ≥4-char alphabetic token with span shift.
+- Abbreviation inconsistency — **deferred to Sub-phase 3.11**.
 
-**Exit gate:** Bug 3a rate drops to 0% on L1 prose; noise fractions logged in the prevalence report.
+**Exit gate:** Bug 3a rate ≤ 0% on L1 prose (measured 0/35,065 on 50K v1_phase3.10 corpus); span-integrity violations 0/50,000.
 
 **Risk:** low — purely post-process.
+
+---
+
+## Sub-phase 3.11 — Layer 5 abbreviation inconsistency (deferred)
+
+**Why:** Abbreviation inconsistency within a single document (e.g., mixing `HER2`, `ERBB2`, and `HER-2`; or `PD-L1` vs `PDL1` vs `PD L1`) is a common real-world noise pattern. Deferred out of Sub-phase 3.10 to keep that scope focused on Bug 3a + typographic artifacts.
+
+**Scope (not yet implemented):**
+- Per-record alias pool sampling: when a gene has declared aliases in `biomarkers.json`, mix surface forms across multiple mentions within compound (L3+) records.
+- Case-variation within alias (e.g., `EGFR` → `egfr`, `Egfr`) that does not reuse `case_variation` (which applies uniformly to the whole sentence).
+
+**Exit gate (when scheduled):** Every compound record that contains ≥2 mentions of the same gene uses at least 2 different surfaces with probability ≥ configured threshold; alias-variance logged in the prevalence report.
+
+**Risk:** medium — alias resolution needs to preserve labeled-span correctness after surface swap.
 
 ---
 

@@ -48,7 +48,7 @@ COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
 BIOMARKERS_PATH = ROOT / "bioconfigs" / "biomarkers.json"
 # Keep generated corpora separated by sub-phase so prior snapshots survive
 # when we regen for a new sub-phase. Override via --output-dir for ad-hoc runs.
-OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.9"
+OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.10"
 
 MUTATION_BIOMARKERS: tuple[str, ...] = (
     "EGFR",

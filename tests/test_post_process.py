@@ -132,6 +132,8 @@ def test_post_processed_record_reports_applied_transforms(
         "case_variation",
         "hyphenation_gene_names",
         "punctuation_variation",
+        "ocr_corruption",
+        "pdf_artifact",
     }
     assert set(post.applied_transforms.keys()) == expected
 

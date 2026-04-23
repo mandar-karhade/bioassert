@@ -182,6 +182,8 @@ def test_applied_transforms_populated_for_every_record(
         "case_variation",
         "hyphenation_gene_names",
         "punctuation_variation",
+        "ocr_corruption",
+        "pdf_artifact",
     }
     for _, rec in records:
         assert set(rec.applied_transforms.keys()) == required
