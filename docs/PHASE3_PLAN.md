@@ -14,7 +14,7 @@ Bugs 1 and 2 from `known_issues.md` represent realistic noise in real-world medi
 
 ---
 
-## Sub-phase 3.1 — Multi-assertion record schema
+## Sub-phase 3.1 — Multi-assertion record schema  **[SHIPPED — PR #1]**
 
 **Why:** L3 and beyond need the record to carry a list of `(gene, variant, status, method, …)` tuples instead of a single-valued record. Landing the schema change alone keeps the diff reviewable.
 
@@ -30,7 +30,7 @@ Bugs 1 and 2 from `known_issues.md` represent realistic noise in real-world medi
 
 ---
 
-## Sub-phase 3.2 — L3 shared-status prose frames
+## Sub-phase 3.2 — L3 shared-status prose frames  **[SHIPPED — PR #3]**
 
 **Why:** the simplest compound — N genes share one status in one sentence. All machinery from 3.1 reused. No per-gene status divergence yet.
 
@@ -48,7 +48,7 @@ Bugs 1 and 2 from `known_issues.md` represent realistic noise in real-world medi
 
 ---
 
-## Sub-phase 3.3 — L3 shorthand / tabular
+## Sub-phase 3.3 — L3 shorthand / tabular  **[SHIPPED — PR #5]**
 
 **Why:** the L2 analogue for L3. Tabular reports often list multiple genes with shorthand statuses per line.
 
@@ -63,7 +63,7 @@ Bugs 1 and 2 from `known_issues.md` represent realistic noise in real-world medi
 
 ---
 
-## Sub-phase 3.4 — L4 heterogeneous compound (prose)
+## Sub-phase 3.4 — L4 heterogeneous compound (prose)  **[SHIPPED — PR #6]**
 
 **Why:** same list structure as L3 but each gene carries independent status. This is where extraction models really start breaking.
 
@@ -78,7 +78,7 @@ Bugs 1 and 2 from `known_issues.md` represent realistic noise in real-world medi
 
 ---
 
-## Sub-phase 3.5 — L4 shorthand / tabular
+## Sub-phase 3.5 — L4 shorthand / tabular  **[SHIPPED — PR #7]**
 
 Parallel to 3.3 — shorthand form of heterogeneous multi-gene. `EGFR +, ALK -, ROS1 WT` style.
 
@@ -86,7 +86,7 @@ Parallel to 3.3 — shorthand form of heterogeneous multi-gene. `EGFR +, ALK -, 
 
 ---
 
-## Sub-phase 3.6 — L5 negation scope
+## Sub-phase 3.6 — L5 negation scope  **[SHIPPED — PR #8]**
 
 **Why:** a qualitatively different primitive — scope markers ("no", "absence of") apply to multiple entities; exception markers ("but", "except") flip polarity mid-sentence.
 
@@ -102,7 +102,28 @@ Parallel to 3.3 — shorthand form of heterogeneous multi-gene. `EGFR +, ALK -, 
 
 ---
 
-## Sub-phase 3.7 — L6 temporal / certainty qualification
+## Sub-phase 3.7 — Compounding tiers (low / high)  **[SHIPPED — PR #9]**
+
+**Pivot note:** the original plan slotted L6 temporal/certainty here. Mid-Phase-3 user feedback (2026-04-23) redirected to compounding complexity first, because the tier dimension is orthogonal to every L3–L5 surface already shipped and unlocks more varied compound records without adding a new complexity level. L6 / L7 / noise expansion move down one slot each.
+
+**Why:** L3/L3S/L4/L4S/L5 records previously used a fixed 2–4 gene range. Clinical reports vary from terse "KRAS and EGFR negative" to panel summaries listing 7–8 biomarkers. A tier knob lets the corpus mix both without inventing new frames.
+
+**Scope (as shipped):**
+- `RenderedRecord` / `PostProcessedRecord` gain `compounding_tier: str` (default `"low"`).
+- Two tiers only — medium was collapsed into high per user feedback:
+  - `low` = exactly 2 genes (minimum compound)
+  - `high` = 3–8 genes, clamped to pool size; cross-class pool mixing (TMB/PD-L1 + mutation biomarkers) allowed
+- `COMPOUND_LOW_N = 2`, `COMPOUND_HIGH_MIN = 3`, `COMPOUND_HIGH_MAX = 8`, `_TIER_RANGES`, `n_range_for_tier(tier)` helper.
+- `render_l3_record` / `render_l4_record` / `render_l5_record` (and shorthand variants) accept `compounding_tier` and stamp it on the returned record. L5 panel-wide frames ignore tier (always 1 labeled fact).
+- Corpus script CLI: `--compound-low` / `--compound-high` (default 0.5/0.5, required to sum to 1.0). Report emits `compound_*_fraction_requested` / `_observed` plus per-level tier breakdown.
+
+**Exit gate (met):** 181 tests passing; 50K regen at `datasets/v1_phase3.7/` showing observed 0.5016 low / 0.4984 high, 107/112 within-2σ, 0 span violations; eyeball review approved.
+
+**Risk:** low — additive parameter on existing renderers; medium pool-mixing decision landed cleanly.
+
+---
+
+## Sub-phase 3.8 — L6 temporal / certainty qualification
 
 **Scope:**
 - Optional `temporal: str | None` and `certainty: str | None` on each `AssertionFact`.
@@ -116,7 +137,7 @@ Parallel to 3.3 — shorthand form of heterogeneous multi-gene. `EGFR +, ALK -, 
 
 ---
 
-## Sub-phase 3.8 — L7 cross-sentence coreference
+## Sub-phase 3.9 — L7 cross-sentence coreference
 
 **Scope:**
 - Record becomes multi-sentence: `sentence` → `sentences: tuple[str, ...]`. Each `AssertionFact` carries a `sentence_index: int` into the tuple.
@@ -129,7 +150,7 @@ Parallel to 3.3 — shorthand form of heterogeneous multi-gene. `EGFR +, ALK -, 
 
 ---
 
-## Sub-phase 3.9 — Layer 5 noise expansion + Bug 3a fix
+## Sub-phase 3.10 — Layer 5 noise expansion + Bug 3a fix
 
 **Why:** addresses `known_issues.md` Bug 3a (whitespace noise inside L1 prose) and extends Layer 5 per the spec's Section 3 Layer 5.
 
