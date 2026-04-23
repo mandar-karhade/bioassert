@@ -114,6 +114,8 @@ def apply_technical_noise(
         test_method=original_fact.test_method,
         measurement_value=original_fact.measurement_value,
         polarity_scope=original_fact.polarity_scope,
+        temporal=original_fact.temporal,
+        certainty=original_fact.certainty,
     )
     return PostProcessedRecord(
         sentence=sentence,

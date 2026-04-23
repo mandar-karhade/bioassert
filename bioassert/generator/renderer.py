@@ -77,6 +77,8 @@ class AssertionFact:
     test_method: Optional[str] = None
     measurement_value: Optional[float] = None
     polarity_scope: str = "direct"
+    temporal: Optional[str] = None
+    certainty: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -1327,4 +1329,545 @@ def _render_l5_panel_wide(
         frame_template=frame_template,
         complexity_level="L5",
         compounding_tier=compounding_tier,
+    )
+
+
+# --- L6 temporal / certainty qualification (Sub-phase 3.8) ---------------
+
+L6_TEMPORAL_VOCAB: tuple[str, ...] = (
+    "previously",
+    "currently",
+    "at diagnosis",
+    "at relapse",
+    "post-TKI",
+)
+
+L6_CERTAINTY_VOCAB: tuple[str, ...] = (
+    "suspected",
+    "confirmed",
+    "probable",
+    "rule-out",
+    "pending",
+)
+
+L6_SHAPES: tuple[str, ...] = ("temporal", "certainty", "combined")
+
+# Status realizations that cannot be used in L6 contexts:
+# - "confirmed" overlaps with the certainty vocab; rendering it as a status
+#   beside a certainty modifier produces ambiguous spans.
+# - "no evidence of" is an incomplete phrase requiring a trailing noun and
+#   doesn't fit the L6 frame shapes that place status mid-clause.
+_L6_STATUS_EXCLUDE: frozenset[str] = frozenset({
+    "confirmed",
+    "no evidence of",
+})
+
+
+def _sample_l6_status_surface(
+    status: str, common: CommonConfig, rng: random.Random
+) -> str:
+    """Draw a status surface suitable for L6 frames.
+
+    Uses the formal phrase category (``positive_phrases`` /
+    ``negation_phrases``) with two extra filters on top of
+    :func:`_filter_gene_free`:
+
+    - excludes realizations listed in :data:`_L6_STATUS_EXCLUDE` (which
+      collide with certainty vocab or require trailing nouns)
+    - renormalizes the remaining distribution before sampling
+    """
+    category_name = _STATUS_CATEGORY[status]
+    category = common.categories.get(category_name)
+    if not isinstance(category, WeightedVariations):
+        raise RenderError(
+            f"common.{category_name} is missing or wrong schema_type"
+        )
+    eligible: dict[str, float] = {}
+    for vid, weight in category.variations.items():
+        surface = category.realizations[vid]
+        if "{gene}" in surface:
+            continue
+        if surface in _L6_STATUS_EXCLUDE:
+            continue
+        eligible[vid] = weight
+    if not eligible:
+        raise RenderError(
+            f"no L6-eligible realizations for status {status!r}"
+        )
+    total = sum(eligible.values())
+    norm = {k: v / total for k, v in eligible.items()}
+    keys = list(norm)
+    weights = [norm[k] for k in keys]
+    vid = rng.choices(keys, weights=weights, k=1)[0]
+    return category.realizations[vid]
+
+
+def _capitalize_first(s: str) -> str:
+    return s[0].upper() + s[1:] if s else s
+
+
+def _pick_contrast_statuses(rng: random.Random) -> tuple[str, str]:
+    """Pick a positive/negative pair for temporal contrast (order randomized)."""
+    return rng.choice([("positive", "negative"), ("negative", "positive")])
+
+
+def render_l6_record(
+    biomarker_pool: list[str],
+    profile: PatientProfile,
+    biomarkers: BiomarkerConfig,
+    common: CommonConfig,
+    rng: random.Random,
+    shape: Optional[str] = None,
+) -> RenderedRecord:
+    """Render one L6 qualifier record.
+
+    Single-gene record in one of three structural shapes:
+
+    - ``"temporal"``: 2 facts, same gene, contrasting statuses at two
+      timepoints. Each fact carries a ``temporal`` marker; ``certainty``
+      is None. Captures clinical change over time.
+    - ``"certainty"``: 1 fact with a hedging certainty modifier; no
+      temporal. Captures diagnostic confidence.
+    - ``"combined"``: 2 facts like temporal contrast, each also carrying
+      an independent certainty value.
+
+    ``shape=None`` selects uniformly from :data:`L6_SHAPES`. Records stamp
+    ``complexity_level="L6"`` and ``compounding_tier="low"`` (tier knob
+    doesn't apply at single-gene level).
+
+    ``profile`` is accepted for signature parity with other renderers but
+    unused — L6 contrast statuses are drawn directly from a fixed
+    positive/negative pair to guarantee divergence.
+    """
+    del profile  # reserved for parity; see docstring
+    if shape is None:
+        shape = rng.choice(L6_SHAPES)
+    if shape not in L6_SHAPES:
+        raise RenderError(
+            f"L6 shape must be one of {L6_SHAPES}, got {shape!r}"
+        )
+    if shape == "temporal":
+        return _render_l6_temporal(biomarker_pool, biomarkers, common, rng)
+    if shape == "certainty":
+        return _render_l6_certainty(biomarker_pool, biomarkers, common, rng)
+    return _render_l6_combined(biomarker_pool, biomarkers, common, rng)
+
+
+def _render_l6_temporal(
+    biomarker_pool: list[str],
+    biomarkers: BiomarkerConfig,
+    common: CommonConfig,
+    rng: random.Random,
+) -> RenderedRecord:
+    gene = rng.choice(biomarker_pool)
+    b = biomarkers.get(gene)
+    form_id = _bare_gene_name_form(b, rng)
+    gene_surface = b.name_forms.realizations[form_id]
+
+    status_a, status_b = _pick_contrast_statuses(rng)
+    surf_a = _sample_l6_status_surface(status_a, common, rng)
+    surf_b = _sample_l6_status_surface(status_b, common, rng)
+    temporal_a, temporal_b = rng.sample(L6_TEMPORAL_VOCAB, 2)
+
+    frame_kind = rng.randrange(3)
+    if frame_kind == 0:
+        sentence, gspans, sspans, frame_template = _l6_temporal_frame1(
+            gene_surface, surf_a, surf_b, temporal_a, temporal_b
+        )
+    elif frame_kind == 1:
+        sentence, gspans, sspans, frame_template = _l6_temporal_frame2(
+            gene_surface, surf_a, surf_b, temporal_a, temporal_b
+        )
+    else:
+        sentence, gspans, sspans, frame_template = _l6_temporal_frame3(
+            gene_surface, surf_a, surf_b, temporal_a, temporal_b
+        )
+
+    fact_a = AssertionFact(
+        gene=gene,
+        status=status_a,
+        spans={"gene": gspans[0], "status": sspans[0]},
+        temporal=temporal_a,
+    )
+    fact_b = AssertionFact(
+        gene=gene,
+        status=status_b,
+        spans={"gene": gspans[1], "status": sspans[1]},
+        temporal=temporal_b,
+    )
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=(fact_a, fact_b),
+        frame_template=frame_template,
+        complexity_level="L6",
+        compounding_tier="low",
+    )
+
+
+def _l6_temporal_frame1(
+    gene_surface: str,
+    status_a: str,
+    status_b: str,
+    temporal_a: str,
+    temporal_b: str,
+) -> tuple[str, tuple[tuple[int, int], tuple[int, int]], tuple[tuple[int, int], tuple[int, int]], str]:
+    """``{gene}: {status_a} {temporal_a}, {status_b} {temporal_b}.``
+
+    Both facts share the gene span.
+    """
+    pieces: list[str] = []
+    pos = 0
+    g_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g_end = pos
+    pieces.append(": "); pos += 2
+    sa_start = pos
+    pieces.append(status_a); pos += len(status_a)
+    sa_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_a); pos += len(temporal_a)
+    pieces.append(", "); pos += 2
+    sb_start = pos
+    pieces.append(status_b); pos += len(status_b)
+    sb_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_b); pos += len(temporal_b)
+    pieces.append(".")
+    sentence = "".join(pieces)
+    gene_span = (g_start, g_end)
+    return (
+        sentence,
+        (gene_span, gene_span),
+        ((sa_start, sa_end), (sb_start, sb_end)),
+        "{gene}: {status_a} {temporal_a}, {status_b} {temporal_b}.",
+    )
+
+
+def _l6_temporal_frame2(
+    gene_surface: str,
+    status_a: str,
+    status_b: str,
+    temporal_a: str,
+    temporal_b: str,
+) -> tuple[str, tuple[tuple[int, int], tuple[int, int]], tuple[tuple[int, int], tuple[int, int]], str]:
+    """``{gene} was {status_a} {temporal_a}; {gene} was {status_b} {temporal_b}.``
+
+    Two gene mentions — each fact owns its own gene span. Gene leads to
+    avoid sentence-start capitalization of the temporal marker (which
+    would break the temporal-label-in-sentence invariant).
+    """
+    pieces: list[str] = []
+    pos = 0
+    g1_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g1_end = pos
+    pieces.append(" was "); pos += 5
+    sa_start = pos
+    pieces.append(status_a); pos += len(status_a)
+    sa_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_a); pos += len(temporal_a)
+    pieces.append("; "); pos += 2
+    g2_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g2_end = pos
+    pieces.append(" was "); pos += 5
+    sb_start = pos
+    pieces.append(status_b); pos += len(status_b)
+    sb_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_b); pos += len(temporal_b)
+    pieces.append(".")
+    sentence = "".join(pieces)
+    return (
+        sentence,
+        ((g1_start, g1_end), (g2_start, g2_end)),
+        ((sa_start, sa_end), (sb_start, sb_end)),
+        "{gene} was {status_a} {temporal_a}; {gene} was {status_b} {temporal_b}.",
+    )
+
+
+def _l6_temporal_frame3(
+    gene_surface: str,
+    status_a: str,
+    status_b: str,
+    temporal_a: str,
+    temporal_b: str,
+) -> tuple[str, tuple[tuple[int, int], tuple[int, int]], tuple[tuple[int, int], tuple[int, int]], str]:
+    """``{Status_a} {temporal_a}, {status_b} {temporal_b} for {gene}.``
+
+    Trailing gene; both facts share the gene span.
+    """
+    status_a_cap = _capitalize_first(status_a)
+    pieces: list[str] = []
+    pos = 0
+    sa_start = pos
+    pieces.append(status_a_cap); pos += len(status_a_cap)
+    sa_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_a); pos += len(temporal_a)
+    pieces.append(", "); pos += 2
+    sb_start = pos
+    pieces.append(status_b); pos += len(status_b)
+    sb_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_b); pos += len(temporal_b)
+    pieces.append(" for "); pos += 5
+    g_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g_end = pos
+    pieces.append(".")
+    sentence = "".join(pieces)
+    gene_span = (g_start, g_end)
+    return (
+        sentence,
+        (gene_span, gene_span),
+        ((sa_start, sa_end), (sb_start, sb_end)),
+        "{Status_a} {temporal_a}, {status_b} {temporal_b} for {gene}.",
+    )
+
+
+def _render_l6_certainty(
+    biomarker_pool: list[str],
+    biomarkers: BiomarkerConfig,
+    common: CommonConfig,
+    rng: random.Random,
+) -> RenderedRecord:
+    gene = rng.choice(biomarker_pool)
+    b = biomarkers.get(gene)
+    form_id = _bare_gene_name_form(b, rng)
+    gene_surface = b.name_forms.realizations[form_id]
+
+    status = rng.choice(("positive", "negative"))
+    status_surface = _sample_l6_status_surface(status, common, rng)
+    certainty = rng.choice(L6_CERTAINTY_VOCAB)
+
+    frame_kind = rng.randrange(3)
+    if frame_kind == 0:
+        sentence, gene_span, status_span, frame_template = _l6_certainty_frame1(
+            gene_surface, status_surface, certainty
+        )
+    elif frame_kind == 1:
+        sentence, gene_span, status_span, frame_template = _l6_certainty_frame2(
+            gene_surface, status_surface, certainty
+        )
+    else:
+        sentence, gene_span, status_span, frame_template = _l6_certainty_frame3(
+            gene_surface, status_surface, certainty
+        )
+
+    fact = AssertionFact(
+        gene=gene,
+        status=status,
+        spans={"gene": gene_span, "status": status_span},
+        certainty=certainty,
+    )
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=(fact,),
+        frame_template=frame_template,
+        complexity_level="L6",
+        compounding_tier="low",
+    )
+
+
+def _l6_certainty_frame1(
+    gene_surface: str, status_surface: str, certainty: str
+) -> tuple[str, tuple[int, int], tuple[int, int], str]:
+    """``{gene} {status} ({certainty}).``"""
+    pieces: list[str] = []
+    pos = 0
+    g_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g_end = pos
+    pieces.append(" "); pos += 1
+    s_start = pos
+    pieces.append(status_surface); pos += len(status_surface)
+    s_end = pos
+    pieces.append(" ("); pos += 2
+    pieces.append(certainty); pos += len(certainty)
+    pieces.append(").")
+    sentence = "".join(pieces)
+    return sentence, (g_start, g_end), (s_start, s_end), "{gene} {status} ({certainty})."
+
+
+def _l6_certainty_frame2(
+    gene_surface: str, status_surface: str, certainty: str
+) -> tuple[str, tuple[int, int], tuple[int, int], str]:
+    """``{gene}: {status} ({certainty}).``"""
+    pieces: list[str] = []
+    pos = 0
+    g_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g_end = pos
+    pieces.append(": "); pos += 2
+    s_start = pos
+    pieces.append(status_surface); pos += len(status_surface)
+    s_end = pos
+    pieces.append(" ("); pos += 2
+    pieces.append(certainty); pos += len(certainty)
+    pieces.append(").")
+    sentence = "".join(pieces)
+    return sentence, (g_start, g_end), (s_start, s_end), "{gene}: {status} ({certainty})."
+
+
+def _l6_certainty_frame3(
+    gene_surface: str, status_surface: str, certainty: str
+) -> tuple[str, tuple[int, int], tuple[int, int], str]:
+    """``{gene} {status}, {certainty}.``"""
+    pieces: list[str] = []
+    pos = 0
+    g_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g_end = pos
+    pieces.append(" "); pos += 1
+    s_start = pos
+    pieces.append(status_surface); pos += len(status_surface)
+    s_end = pos
+    pieces.append(", "); pos += 2
+    pieces.append(certainty); pos += len(certainty)
+    pieces.append(".")
+    sentence = "".join(pieces)
+    return sentence, (g_start, g_end), (s_start, s_end), "{gene} {status}, {certainty}."
+
+
+def _render_l6_combined(
+    biomarker_pool: list[str],
+    biomarkers: BiomarkerConfig,
+    common: CommonConfig,
+    rng: random.Random,
+) -> RenderedRecord:
+    gene = rng.choice(biomarker_pool)
+    b = biomarkers.get(gene)
+    form_id = _bare_gene_name_form(b, rng)
+    gene_surface = b.name_forms.realizations[form_id]
+
+    status_a, status_b = _pick_contrast_statuses(rng)
+    surf_a = _sample_l6_status_surface(status_a, common, rng)
+    surf_b = _sample_l6_status_surface(status_b, common, rng)
+    temporal_a, temporal_b = rng.sample(L6_TEMPORAL_VOCAB, 2)
+    certainty_a = rng.choice(L6_CERTAINTY_VOCAB)
+    certainty_b = rng.choice(L6_CERTAINTY_VOCAB)
+
+    frame_kind = rng.randrange(2)
+    if frame_kind == 0:
+        sentence, gspans, sspans, frame_template = _l6_combined_frame1(
+            gene_surface, surf_a, surf_b, temporal_a, temporal_b, certainty_a, certainty_b
+        )
+    else:
+        sentence, gspans, sspans, frame_template = _l6_combined_frame2(
+            gene_surface, surf_a, surf_b, temporal_a, temporal_b, certainty_a, certainty_b
+        )
+
+    fact_a = AssertionFact(
+        gene=gene,
+        status=status_a,
+        spans={"gene": gspans[0], "status": sspans[0]},
+        temporal=temporal_a,
+        certainty=certainty_a,
+    )
+    fact_b = AssertionFact(
+        gene=gene,
+        status=status_b,
+        spans={"gene": gspans[1], "status": sspans[1]},
+        temporal=temporal_b,
+        certainty=certainty_b,
+    )
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=(fact_a, fact_b),
+        frame_template=frame_template,
+        complexity_level="L6",
+        compounding_tier="low",
+    )
+
+
+def _l6_combined_frame1(
+    gene_surface: str,
+    status_a: str,
+    status_b: str,
+    temporal_a: str,
+    temporal_b: str,
+    certainty_a: str,
+    certainty_b: str,
+) -> tuple[str, tuple[tuple[int, int], tuple[int, int]], tuple[tuple[int, int], tuple[int, int]], str]:
+    """``{gene}: {status_a} {temporal_a} ({certainty_a}), {status_b} {temporal_b} ({certainty_b}).``"""
+    pieces: list[str] = []
+    pos = 0
+    g_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g_end = pos
+    pieces.append(": "); pos += 2
+    sa_start = pos
+    pieces.append(status_a); pos += len(status_a)
+    sa_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_a); pos += len(temporal_a)
+    pieces.append(" ("); pos += 2
+    pieces.append(certainty_a); pos += len(certainty_a)
+    pieces.append("), "); pos += 3
+    sb_start = pos
+    pieces.append(status_b); pos += len(status_b)
+    sb_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_b); pos += len(temporal_b)
+    pieces.append(" ("); pos += 2
+    pieces.append(certainty_b); pos += len(certainty_b)
+    pieces.append(").")
+    sentence = "".join(pieces)
+    gene_span = (g_start, g_end)
+    return (
+        sentence,
+        (gene_span, gene_span),
+        ((sa_start, sa_end), (sb_start, sb_end)),
+        "{gene}: {status_a} {temporal_a} ({certainty_a}), {status_b} {temporal_b} ({certainty_b}).",
+    )
+
+
+def _l6_combined_frame2(
+    gene_surface: str,
+    status_a: str,
+    status_b: str,
+    temporal_a: str,
+    temporal_b: str,
+    certainty_a: str,
+    certainty_b: str,
+) -> tuple[str, tuple[tuple[int, int], tuple[int, int]], tuple[tuple[int, int], tuple[int, int]], str]:
+    """``{gene} was {status_a} {temporal_a} ({certainty_a}); {gene} was {status_b} {temporal_b} ({certainty_b}).``
+
+    Gene leads each clause to avoid sentence-start capitalization of a
+    labeled temporal marker.
+    """
+    pieces: list[str] = []
+    pos = 0
+    g1_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g1_end = pos
+    pieces.append(" was "); pos += 5
+    sa_start = pos
+    pieces.append(status_a); pos += len(status_a)
+    sa_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_a); pos += len(temporal_a)
+    pieces.append(" ("); pos += 2
+    pieces.append(certainty_a); pos += len(certainty_a)
+    pieces.append("); "); pos += 3
+    g2_start = pos
+    pieces.append(gene_surface); pos += len(gene_surface)
+    g2_end = pos
+    pieces.append(" was "); pos += 5
+    sb_start = pos
+    pieces.append(status_b); pos += len(status_b)
+    sb_end = pos
+    pieces.append(" "); pos += 1
+    pieces.append(temporal_b); pos += len(temporal_b)
+    pieces.append(" ("); pos += 2
+    pieces.append(certainty_b); pos += len(certainty_b)
+    pieces.append(").")
+    sentence = "".join(pieces)
+    return (
+        sentence,
+        ((g1_start, g1_end), (g2_start, g2_end)),
+        ((sa_start, sa_end), (sb_start, sb_end)),
+        "{gene} was {status_a} {temporal_a} ({certainty_a}); {gene} was {status_b} {temporal_b} ({certainty_b}).",
     )
