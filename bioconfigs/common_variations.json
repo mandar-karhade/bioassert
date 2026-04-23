@@ -366,6 +366,21 @@
         "extra_comma": 0.03,
         "ocr_artifact": 0.02
       }
+    },
+    "ocr_corruption": {
+      "description": "Visually-confusable character swaps (l/1, O/0, S/5, B/8, Z/2, I/l) simulating OCR misreads on scanned clinical documents. Length-preserving; never touches labeled spans.",
+      "distribution": {
+        "canonical": 0.93,
+        "light": 0.05,
+        "moderate": 0.02
+      }
+    },
+    "pdf_artifact": {
+      "description": "PDF-extraction artifacts: inserts a hyphenated linebreak ('-\\n') inside a non-labeled token to simulate a word broken across a page edge. Adjusts labeled spans to stay anchored.",
+      "distribution": {
+        "canonical": 0.96,
+        "hyphen_linebreak": 0.04
+      }
     }
   }
 }

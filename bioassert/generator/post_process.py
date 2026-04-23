@@ -56,6 +56,27 @@ class PostProcessedRecord:
 _ALPHA_ONLY = re.compile(r"^[A-Za-z]+$")
 _PUNCT_CHARS = set(",.;:!?")
 
+# OCR substitution pool — visually-confusable char pairs commonly seen in
+# scanned documents. All swaps are length-preserving so labeled spans stay
+# stable when corruption lands outside them.
+OCR_CHAR_SWAPS: dict[str, str] = {
+    "l": "1",
+    "1": "l",
+    "O": "0",
+    "0": "O",
+    "S": "5",
+    "5": "S",
+    "B": "8",
+    "8": "B",
+    "Z": "2",
+    "2": "Z",
+    "I": "l",
+}
+
+# PDF hyphen-linebreak artifact — a hyphen followed by a newline inserted
+# inside a non-labeled token simulates a word broken across a PDF page edge.
+PDF_HYPHEN_LINEBREAK: str = "-\n"
+
 
 class PostProcessError(RuntimeError):
     """Raised when a noise transformation would violate span integrity."""
@@ -111,6 +132,22 @@ def apply_technical_noise(
         if mode != "canonical":
             sentence, spans = _apply_punctuation(sentence, spans, mode, rng)
 
+    if "ocr_corruption" in noise.categories:
+        mode = _sample_mode(
+            noise.categories["ocr_corruption"].distribution, rng
+        )
+        applied["ocr_corruption"] = mode
+        if mode != "canonical":
+            sentence = _apply_ocr_corruption(sentence, spans, mode, rng)
+
+    if "pdf_artifact" in noise.categories:
+        mode = _sample_mode(
+            noise.categories["pdf_artifact"].distribution, rng
+        )
+        applied["pdf_artifact"] = mode
+        if mode != "canonical":
+            sentence, spans = _apply_pdf_artifact(sentence, spans, mode, rng)
+
     new_fact = AssertionFact(
         gene=original_fact.gene,
         status=original_fact.status,
@@ -149,6 +186,8 @@ def _passthrough_post_process(record: RenderedRecord) -> PostProcessedRecord:
         "whitespace": "skipped",
         "case_variation": "skipped",
         "punctuation_variation": "skipped",
+        "ocr_corruption": "skipped",
+        "pdf_artifact": "skipped",
     }
     return PostProcessedRecord(
         sentence=record.sentence,
@@ -277,13 +316,44 @@ def _space_positions_outside_spans(
     ]
 
 
+def _slot_boundary_space_positions(
+    sentence: str, spans: dict[str, tuple[int, int]]
+) -> list[int]:
+    """Return space positions that are immediately adjacent to a labeled span.
+
+    A space at index ``i`` qualifies when either ``i == span_end`` for some
+    labeled span (the space sits directly after a slot) or
+    ``i + 1 == span_start`` (the space sits directly before a slot).
+    Prose-interior spaces (between frame connective words like ``was`` and
+    ``found to be``) are excluded so Bug 3a cannot reappear.
+    """
+    boundaries: set[int] = set()
+    for start, end in spans.values():
+        if start - 1 >= 0 and sentence[start - 1] == " ":
+            boundaries.add(start - 1)
+        if end < len(sentence) and sentence[end] == " ":
+            boundaries.add(end)
+    return sorted(boundaries)
+
+
 def _apply_whitespace(
     sentence: str,
     spans: dict[str, tuple[int, int]],
     mode: str,
     rng: random.Random,
 ) -> tuple[str, dict[str, tuple[int, int]]]:
-    positions = _space_positions_outside_spans(sentence, spans)
+    if mode in ("tab", "newline_mid_sentence", "double_space"):
+        positions = _slot_boundary_space_positions(sentence, spans)
+    else:
+        positions = _space_positions_outside_spans(sentence, spans)
+    if mode == "no_space_after_punct":
+        punct_space = _punct_space_positions(sentence, spans)
+        if not punct_space:
+            return sentence, spans
+        pick = rng.choice(punct_space)
+        new_sentence = sentence[:pick] + sentence[pick + 1 :]
+        new_spans = _shift_spans(spans, pick, -1)
+        return new_sentence, new_spans
     if not positions:
         return sentence, spans
     pick = rng.choice(positions)
@@ -296,15 +366,6 @@ def _apply_whitespace(
     if mode == "double_space":
         new_sentence = sentence[:pick] + "  " + sentence[pick + 1 :]
         new_spans = _shift_spans(spans, pick + 1, 1)
-        return new_sentence, new_spans
-
-    if mode == "no_space_after_punct":
-        punct_space = _punct_space_positions(sentence, spans)
-        if not punct_space:
-            return sentence, spans
-        pick = rng.choice(punct_space)
-        new_sentence = sentence[:pick] + sentence[pick + 1 :]
-        new_spans = _shift_spans(spans, pick, -1)
         return new_sentence, new_spans
 
     raise PostProcessError(f"unknown whitespace mode {mode!r}")
@@ -386,7 +447,90 @@ def _ocr_artifact(
     return new_sentence, spans
 
 
+_OCR_LIGHT_MAX = 2
+_OCR_MODERATE_MAX = 5
+_PDF_MIN_TOKEN_LEN = 4
+_PDF_TOKEN_RE = re.compile(r"[A-Za-z]+")
+
+
+def _apply_ocr_corruption(
+    sentence: str,
+    spans: dict[str, tuple[int, int]],
+    mode: str,
+    rng: random.Random,
+) -> str:
+    """Apply length-preserving OCR character swaps outside labeled spans.
+
+    ``light`` swaps 1-2 eligible characters; ``moderate`` swaps up to 5.
+    ``canonical`` is an identity. Labeled span characters are never touched
+    so ``sentence[s:e]`` still resolves to the intended surface.
+    """
+    if mode == "canonical":
+        return sentence
+    if mode == "light":
+        max_swaps = _OCR_LIGHT_MAX
+    elif mode == "moderate":
+        max_swaps = _OCR_MODERATE_MAX
+    else:
+        raise PostProcessError(f"unknown ocr_corruption mode {mode!r}")
+
+    candidates = [
+        i
+        for i, ch in enumerate(sentence)
+        if ch in OCR_CHAR_SWAPS and _outside_any_span(i, spans)
+    ]
+    if not candidates:
+        return sentence
+    k = rng.randint(1, min(max_swaps, len(candidates)))
+    picks = rng.sample(candidates, k)
+    chars = list(sentence)
+    for pos in picks:
+        chars[pos] = OCR_CHAR_SWAPS[chars[pos]]
+    return "".join(chars)
+
+
+def _apply_pdf_artifact(
+    sentence: str,
+    spans: dict[str, tuple[int, int]],
+    mode: str,
+    rng: random.Random,
+) -> tuple[str, dict[str, tuple[int, int]]]:
+    """Insert a PDF-style hyphenated linebreak inside a non-labeled token.
+
+    ``hyphen_linebreak`` picks a purely-alphabetic word of ≥4 chars that
+    does not overlap any labeled span, then splices ``-\\n`` at a random
+    interior position. Spans strictly after the cut shift by +2.
+    ``canonical`` is an identity.
+    """
+    if mode == "canonical":
+        return sentence, spans
+    if mode != "hyphen_linebreak":
+        raise PostProcessError(f"unknown pdf_artifact mode {mode!r}")
+
+    candidates: list[int] = []
+    for match in _PDF_TOKEN_RE.finditer(sentence):
+        start, end = match.start(), match.end()
+        if (end - start) < _PDF_MIN_TOKEN_LEN:
+            continue
+        if any(
+            not (end <= sstart or start >= send)
+            for sstart, send in spans.values()
+        ):
+            continue
+        candidates.extend(range(start + 1, end))
+
+    if not candidates:
+        return sentence, spans
+
+    pick = rng.choice(candidates)
+    new_sentence = sentence[:pick] + PDF_HYPHEN_LINEBREAK + sentence[pick:]
+    new_spans = _shift_spans(spans, pick, len(PDF_HYPHEN_LINEBREAK))
+    return new_sentence, new_spans
+
+
 __all__ = [
+    "OCR_CHAR_SWAPS",
+    "PDF_HYPHEN_LINEBREAK",
     "PostProcessedRecord",
     "PostProcessError",
     "apply_technical_noise",
