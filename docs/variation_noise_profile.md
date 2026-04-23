@@ -4,7 +4,7 @@
 
 **Audience:** anyone consuming the corpus, reviewing a PR that changes variation/noise, or writing the dataset card.
 
-**Non-goal:** an execution log of how variation/noise was built over time. For phase-by-phase history, see [`archived/PHASE3_PLAN.md`](archived/PHASE3_PLAN.md).
+**Non-goal:** an execution log of how variation/noise was built over time. Phase/sub-phase numbering is intentionally not tracked here — it was creating confusion with the layer numbering (Phase 3.1 vs Layer 1 etc.) and has been retired. `git log` is authoritative for history.
 
 ---
 
@@ -408,7 +408,7 @@ Multi-paragraph pathology reports, consult notes, and tumor-board summaries with
 
 ## 8. What this document is not
 
-- **Not a changelog.** For per-sub-phase history, see [`archived/PHASE3_PLAN.md`](archived/PHASE3_PLAN.md).
+- **Not a changelog.** `git log` is authoritative for implementation history. The previous `PHASE3_PLAN.md` execution log has been retired because its sub-phase numbers (3.1, 3.2, ...) were confusable with the layer numbers (Layer 1, Layer 2, ...).
 - **Not a config reference.** For the JSON schema that drives variation, see [`CONFIG_ARCHITECTURE.md`](CONFIG_ARCHITECTURE.md).
 - **Not an evaluation plan.** For stratified metrics and baselines, see [PROJECT_SPEC.md §5–§6](PROJECT_SPEC.md#5-evaluation-harness).
 - **Not a bug list.** For known noise/grammar issues accepted as background noise, see [`known_issues.md`](known_issues.md).
