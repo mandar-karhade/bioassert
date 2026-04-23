@@ -1,7 +1,7 @@
 """Probability-weighted variation config (Phase 2a).
 
 Loads `common_variations.json` and `biomarkers.json` into typed Pydantic
-models, enforces the 12 validation rules from CONFIG_ARCHITECTURE.md Section 7,
+models, enforces the 12 validation rules from config_architecture.md Section 7,
 and exposes helpers the generator uses for weighted sampling.
 """
 from bioassert.config.loader import (

@@ -1,4 +1,4 @@
-"""Cross-config invariants (CONFIG_ARCHITECTURE.md §7.5, §7.6, §2.3)."""
+"""Cross-config invariants (config_architecture.md §7.5, §7.6, §2.3)."""
 from __future__ import annotations
 
 from copy import deepcopy

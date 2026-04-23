@@ -18,10 +18,10 @@ The corpus lands at `datasets/v1_phase2b/corpus.jsonl` with a `prevalence_report
 
 ## Documents
 
-- [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md) — full project spec (seven-layer architecture, motivation, roadmap)
-- [docs/CONFIG_ARCHITECTURE.md](docs/CONFIG_ARCHITECTURE.md) — live config-driven architecture (Phase 2)
-- [docs/CONVERSATION_CONTEXT.md](docs/CONVERSATION_CONTEXT.md) — design rationale and decision log
-- [docs/NSCLC_BIOMARKER_REFERENCE.md](docs/NSCLC_BIOMARKER_REFERENCE.md) — clinical reference for the Tier 1 panel
+- [docs/project_spec.md](docs/project_spec.md) — full project spec (seven-layer architecture, motivation, roadmap)
+- [docs/config_architecture.md](docs/config_architecture.md) — live config-driven architecture (Phase 2)
+- [docs/conversation_context.md](docs/conversation_context.md) — design rationale and decision log
+- [docs/nsclc_biomarker_reference.md](docs/nsclc_biomarker_reference.md) — clinical reference for the Tier 1 panel
 - [docs/variation_noise_profile.md](docs/variation_noise_profile.md) — canonical reference for every shipped complexity level, vocabulary category, noise transform, and prevalence axis
 - [docs/known_issues.md](docs/known_issues.md) — tracked rendering variation bugs (with per-bug rates and deferred-fix notes)
 - [docs/architecture.md](docs/architecture.md), [docs/complexity_levels.md](docs/complexity_levels.md), [docs/limitations.md](docs/limitations.md) — WIP stubs

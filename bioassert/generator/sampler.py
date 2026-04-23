@@ -83,7 +83,7 @@ def sample_biomarker_name_form(
     Honours ``variant.render_constraints.require_biomarker_name_forms`` when
     present — the subset restriction keeps ``unspecified_fusion`` variants from
     producing a sentence that loses the fusion signal
-    (CONFIG_ARCHITECTURE.md §8.3).
+    (config_architecture.md §8.3).
     """
     subset: Optional[set[str]] = None
     if variant is not None and variant.render_constraints is not None:

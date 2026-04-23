@@ -5,7 +5,7 @@ metadata) tuples with char-level labels that satisfy Non-Negotiable #1: the
 gene, variant, method, status, and clone spans returned alongside each
 sentence are literal substrings at the recorded positions. Placeholders
 (``{gene}``, ``{method}``, ``{result}``, ``{value}``) are expanded inside
-realization strings before slot substitution per CONFIG_ARCHITECTURE.md §7.5.
+realization strings before slot substitution per config_architecture.md §7.5.
 
 Phase 2b extends Phase 2a L1 rendering to expression biomarkers (PD-L1, TMB):
 positive status draws from ``variants`` with ``{value}`` substitution over the
@@ -476,7 +476,7 @@ def render_l1_record(
 ) -> RenderedRecord:
     """Sample + render one record for ``biomarker_name`` under ``profile``.
 
-    Flow mirrors CONFIG_ARCHITECTURE.md §3. Supports mutation, fusion,
+    Flow mirrors config_architecture.md §3. Supports mutation, fusion,
     composite, and expression biomarkers. For expression biomarkers the
     descriptor slot draws from ``variants`` when status is positive and from
     ``negative_forms`` when status is negative; equivocal and not_tested leave

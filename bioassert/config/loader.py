@@ -51,7 +51,7 @@ class CommonConfig(BaseModel):
 
         Biomarker ``preferred_methods`` only supplies weights — realizations
         are joined in from ``common.test_methods.realizations`` (see
-        CONFIG_ARCHITECTURE.md §2.4).
+        config_architecture.md §2.4).
         """
         methods = self.categories.get("test_methods")
         if not isinstance(methods, WeightedVariations):

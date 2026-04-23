@@ -8,7 +8,7 @@ Define the seven complexity strata (L1–L7) formally with canonical examples, g
 
 ## Outline
 
-- Motivation: why aggregate F1 hides structural failure modes (link to [CONVERSATION_CONTEXT.md](CONVERSATION_CONTEXT.md))
+- Motivation: why aggregate F1 hides structural failure modes (link to [conversation_context.md](conversation_context.md))
 - L1 — Single assertion, canonical name, explicit status
 - L2 — Lexical variation, abbreviations, synonyms
 - L3 — List distribution, one status shared across multiple genes
@@ -21,4 +21,4 @@ Define the seven complexity strata (L1–L7) formally with canonical examples, g
 - Sampling budget per level per biomarker combination
 - Adversarial category placement (distractors sit orthogonal to L1–L7)
 
-Cross-reference: [PROJECT_SPEC.md Section 3 / Layer 4](PROJECT_SPEC.md)
+Cross-reference: [project_spec.md Section 3 / Layer 4](project_spec.md)

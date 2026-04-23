@@ -3,7 +3,7 @@
 Applies the four ``technical_noise`` sub-categories
 (``whitespace``, ``case_variation``, ``hyphenation_gene_names``,
 ``punctuation_variation``) AFTER semantic composition per
-CONFIG_ARCHITECTURE.md §7.6. Every transformation updates the labeled
+config_architecture.md §7.6. Every transformation updates the labeled
 character spans in lockstep with the mutated sentence so Non-Negotiable #1
 (spans resolve to literal substrings) continues to hold post-noise.
 

@@ -2,7 +2,7 @@
 
 A :class:`PatientProfile` carries the five canonical population axes. The
 cascade (:meth:`PatientProfile.population_key_cascade`) emits candidate keys
-in decreasing specificity per CONFIG_ARCHITECTURE.md §2.3. The sampler pulls
+in decreasing specificity per config_architecture.md §2.3. The sampler pulls
 status distributions for a biomarker by walking the cascade until it finds
 a configured key; terminal fallback is always ``{histology}``.
 """
@@ -80,7 +80,7 @@ def resolve_status_distribution(
     for ``histology='other'`` patients since biomarker configs only guarantee
     ``adenocarcinoma``/``squamous``), the ultimate fallback is the configured
     ``adenocarcinoma`` row — the schema validator enforces that it exists.
-    See CONFIG_ARCHITECTURE.md §2.3.
+    See config_architecture.md §2.3.
     """
     cascade = profile.population_key_cascade()
     pops = biomarker.status_distribution_by_population

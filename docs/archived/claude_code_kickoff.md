@@ -1,16 +1,16 @@
 # Claude Code Kickoff Prompt
 
-Copy this into a new Claude Code session to begin development. Paste `PROJECT_SPEC.md` and `CONVERSATION_CONTEXT.md` as context files alongside.
+Copy this into a new Claude Code session to begin development. Paste `project_spec.md` and `conversation_context.md` as context files alongside.
 
 ---
 
 ## Prompt to paste
 
-> I'm starting a new project: a synthetic corpus generator for biomarker assertion extraction in lung cancer (NSCLC). The full specification is in `PROJECT_SPEC.md` and the conversation backstory is in `CONVERSATION_CONTEXT.md`. Read both carefully before writing any code.
+> I'm starting a new project: a synthetic corpus generator for biomarker assertion extraction in lung cancer (NSCLC). The full specification is in `project_spec.md` and the conversation backstory is in `conversation_context.md`. Read both carefully before writing any code.
 >
 > The core architectural principle — never invert this — is: **ground truth is the structured assertion. Surface text is rendered from assertions. Labels are correct by construction.**
 >
-> For this first session, produce the minimum viable end-to-end slice defined in Section 13 of PROJECT_SPEC.md:
+> For this first session, produce the minimum viable end-to-end slice defined in Section 13 of project_spec.md:
 >
 > 1. Repo scaffold with `pyproject.toml` (use `uv` or `hatch` for packaging), directory layout matching Section 9
 > 2. `ontology/biomarkers.yaml` with 3 biomarkers fully profiled as the schema reference: **EGFR, ALK, KRAS**. Include all fields from the Layer 1 example (canonical, abbreviations, spelling_variants, gene_family, common_variants with aliases, test_methods, result_vocabulary, measurement_types, clinical_associations, prevalence with multiple subpopulations, prevalence_sources). Use published NSCLC molecular epidemiology as sources.

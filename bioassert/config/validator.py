@@ -1,4 +1,4 @@
-"""Cross-config validation for Phase 2a (CONFIG_ARCHITECTURE.md §7).
+"""Cross-config validation for Phase 2a (config_architecture.md §7).
 
 Structural invariants (weights sum to 1.0, matched variation/realization key
 sets, bounded probabilities, terminal fallbacks) are enforced by the Pydantic

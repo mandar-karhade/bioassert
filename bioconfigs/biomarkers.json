@@ -56,7 +56,7 @@
       "realizations": "dict"
     },
     "status_distribution_by_population": {
-      "description": "Prior probability of each status outcome, per simulated patient subpopulation. Keys follow composable multi-axis schema (see CONFIG_ARCHITECTURE.md Section 2.3). MUST include 'adenocarcinoma' and 'squamous' as terminal fallbacks.",
+      "description": "Prior probability of each status outcome, per simulated patient subpopulation. Keys follow composable multi-axis schema (see config_architecture.md Section 2.3). MUST include 'adenocarcinoma' and 'squamous' as terminal fallbacks.",
       "<population_key>": {
         "positive": "float",
         "negative": "float",

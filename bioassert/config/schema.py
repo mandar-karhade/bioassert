@@ -1,6 +1,6 @@
 """Pydantic models for the Phase 2a probability-weighted config.
 
-Shape follows CONFIG_ARCHITECTURE.md Sections 2.1–2.4 and 8. Structural
+Shape follows config_architecture.md Sections 2.1–2.4 and 8. Structural
 invariants (sum-to-1 distributions, matched variations/realizations key sets,
 positivity bounds) are enforced here at load time via model validators. Cross-
 object invariants (preferred_methods ⊂ common.test_methods, render_constraints
@@ -62,7 +62,7 @@ class WeightedVariations(BaseModel):
     prior over variation IDs, and ``realizations`` maps each ID to its surface
     string. Realization strings may contain placeholder tokens (``{gene}``,
     ``{method}``, ``{result}``, ``{value}``) that the renderer fills at render
-    time — see CONFIG_ARCHITECTURE.md §7.5.
+    time — see config_architecture.md §7.5.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -90,7 +90,7 @@ class CloneAttribution(BaseModel):
 
     Schema type: ``weighted_variations_with_attachment``. Sampling is two-stage:
     first a Bernoulli roll with ``attachment_probability``, then (if attached)
-    a weighted draw from ``variations``. See CONFIG_ARCHITECTURE.md §8.4.
+    a weighted draw from ``variations``. See config_architecture.md §8.4.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -140,7 +140,7 @@ class PostProcessTransformations(BaseModel):
     Schema type: ``post_process_transformations``. Each sub-category
     (``whitespace``, ``case_variation``, …) is its own weighted distribution
     applied probabilistically AFTER semantic composition. See
-    CONFIG_ARCHITECTURE.md §7.6.
+    config_architecture.md §7.6.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -157,7 +157,7 @@ class RenderConstraints(BaseModel):
     with this constraint is sampled, the biomarker-level name_form sampler is
     restricted to the listed subset (weights renormalized). Used to keep
     fusion ``unspecified_fusion`` variants legible — see
-    CONFIG_ARCHITECTURE.md §8.3.
+    config_architecture.md §8.3.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -199,7 +199,7 @@ class NegativeForms(BaseModel):
 
     Treated as a ``weighted_variations`` block that is sampled from when
     ``status == "negative"``, separate from the positive-direction ``variants``
-    list. See CONFIG_ARCHITECTURE.md §8.1.
+    list. See config_architecture.md §8.1.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -262,7 +262,7 @@ class PreferredMethods(BaseModel):
     """Biomarker-specific method-weights override.
 
     Weights only — realizations are canonical and come from
-    ``common.test_methods.realizations``. See CONFIG_ARCHITECTURE.md §2.4.
+    ``common.test_methods.realizations``. See config_architecture.md §2.4.
     """
 
     model_config = ConfigDict(extra="forbid")

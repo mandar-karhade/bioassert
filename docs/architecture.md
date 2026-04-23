@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Document the seven-layer architecture from [PROJECT_SPEC.md Section 3](PROJECT_SPEC.md) with concrete data-flow diagrams, integration points, and per-layer ownership as each phase completes.
+Document the seven-layer architecture from [project_spec.md Section 3](project_spec.md) with concrete data-flow diagrams, integration points, and per-layer ownership as each phase completes.
 
 ## Outline
 
@@ -19,4 +19,4 @@ Document the seven-layer architecture from [PROJECT_SPEC.md Section 3](PROJECT_S
 - Cross-cutting — LLM paraphrase layer (Section 4 of spec)
 - Integration contract between `bioassert` generator and `bioassert_eval` harness
 
-Cross-reference: [PROJECT_SPEC.md Section 3](PROJECT_SPEC.md)
+Cross-reference: [project_spec.md Section 3](project_spec.md)

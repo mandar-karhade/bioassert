@@ -10,7 +10,7 @@
 
 ## 1. Architecture recap
 
-The generator is structured along the seven-layer spec in [PROJECT_SPEC.md §3](PROJECT_SPEC.md#3-seven-layer-architecture). For variation/noise purposes, four of the seven layers actively shape the surface text that lands in the corpus:
+The generator is structured along the seven-layer spec in [project_spec.md §3](project_spec.md#3-seven-layer-architecture). For variation/noise purposes, four of the seven layers actively shape the surface text that lands in the corpus:
 
 | Spec Layer | Role in variation | Mechanism | Source |
 |---|---|---|---|
@@ -242,7 +242,7 @@ Tier 1 panel coverage (11 biomarkers):
 
 ## 5. Layer 6 — prevalence calibration
 
-Prevalence sampling is a covariate on status selection only. It does **not** drive surface-text variation — see [PROJECT_SPEC.md Layer 6](PROJECT_SPEC.md#layer-6--probabilistic-clinical-realism).
+Prevalence sampling is a covariate on status selection only. It does **not** drive surface-text variation — see [project_spec.md Layer 6](project_spec.md#layer-6--probabilistic-clinical-realism).
 
 ### 5.1 Patient axes ([`patient_sampler.py`](../bioassert/generator/patient_sampler.py))
 
@@ -395,22 +395,22 @@ Multi-paragraph pathology reports, consult notes, and tumor-board summaries with
 1. Hand-authored ~30–50 document-type scaffolds (pathology, molecular summary, consult, tumor board) with slot-filling for the biomarker section.
 2. One-time frontier-model distillation for distractor-prose variety (~500 scaffolds, no ongoing API cost).
 3. Biomarker-slot content is rendered by the existing L1–L7 generator — no new label surface area.
-4. Optional local-LLM filler (Qwen 2.5 7B / Phi-3) for distractor prose with hard span-preservation verification (see [PROJECT_SPEC.md §4](PROJECT_SPEC.md#4-llm-paraphrase-layer-optional-post-hoc)).
+4. Optional local-LLM filler (Qwen 2.5 7B / Phi-3) for distractor prose with hard span-preservation verification (see [project_spec.md §4](project_spec.md#4-llm-paraphrase-layer-optional-post-hoc)).
 
 **Explicitly out of scope for v1:**
 - Multi-paragraph composition
 - Distractor content corpora integration
 - Document-length stratification metrics
 - LLM paraphrase layer (Phase 4+)
-- `bioassert/generator/document.py`, `bioassert/paraphrase/` (directories scaffolded in [PROJECT_SPEC.md §9](PROJECT_SPEC.md#9-repository-layout) but not populated)
+- `bioassert/generator/document.py`, `bioassert/paraphrase/` (directories scaffolded in [project_spec.md §9](project_spec.md#9-repository-layout) but not populated)
 
 ---
 
 ## 8. What this document is not
 
 - **Not a changelog.** `git log` is authoritative for implementation history. The previous `PHASE3_PLAN.md` execution log has been retired because its sub-phase numbers (3.1, 3.2, ...) were confusable with the layer numbers (Layer 1, Layer 2, ...).
-- **Not a config reference.** For the JSON schema that drives variation, see [`CONFIG_ARCHITECTURE.md`](CONFIG_ARCHITECTURE.md).
-- **Not an evaluation plan.** For stratified metrics and baselines, see [PROJECT_SPEC.md §5–§6](PROJECT_SPEC.md#5-evaluation-harness).
+- **Not a config reference.** For the JSON schema that drives variation, see [`config_architecture.md`](config_architecture.md).
+- **Not an evaluation plan.** For stratified metrics and baselines, see [project_spec.md §5–§6](project_spec.md#5-evaluation-harness).
 - **Not a bug list.** For known noise/grammar issues accepted as background noise, see [`known_issues.md`](known_issues.md).
 
 When the shipped variation/noise stack changes — frame added, noise category added, distribution reweighted, new biomarker alias — this document must be updated in the same PR.

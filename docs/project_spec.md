@@ -398,7 +398,7 @@ bioassert/
 │   │   ├── __init__.py
 │   │   ├── schema.py             # discriminated-union Pydantic models
 │   │   ├── loader.py             # JSON loading
-│   │   └── validator.py          # 12-check validation (CONFIG_ARCHITECTURE.md §7)
+│   │   └── validator.py          # 12-check validation (config_architecture.md §7)
 │   ├── generator/
 │   │   ├── __init__.py
 │   │   ├── patient_sampler.py    # PatientProfile + population key cascade
@@ -440,7 +440,7 @@ bioassert/
 │   ├── v1_phase2a/               # 10K L1 mutation/fusion corpus
 │   └── v1_phase2b/               # 50K mixed L1+L2 corpus (full Tier 1 panel)
 ├── docs/
-│   ├── CONFIG_ARCHITECTURE.md    # Phase 2 config-driven architecture
+│   ├── config_architecture.md    # Phase 2 config-driven architecture
 │   ├── architecture.md           # WIP stub
 │   ├── complexity_levels.md      # WIP stub
 │   ├── limitations.md            # WIP stub
@@ -480,7 +480,7 @@ bioassert/
 **Phase 2a — Probabilistic variation layer (Weeks 3–4)**
 - Migrate the three Phase 1 biomarkers from YAML to the `biomarkers.json` + `common_variations.json` schema
 - Pydantic discriminated-union models for `$schema_type` dispatch (weighted_variations, weighted_variations_with_attachment, post_process_transformations)
-- Loader with all 12 validation checks from CONFIG_ARCHITECTURE.md Section 7
+- Loader with all 12 validation checks from config_architecture.md Section 7
 - Patient profile sampler + population key cascade lookup
 - Sampler handling `render_constraints.require_biomarker_name_forms` coupling
 - Sampler handling `clone_attribution` Bernoulli attachment
@@ -572,4 +572,4 @@ The original Phase 1 kickoff deliverable (now completed and superseded) targeted
 6. `scripts/generate_corpus.py` emitting 1,000 L1 assertions + sentences as JSONL
 7. Unit tests validating that generated sentences always contain the labeled spans
 
-Phase 1 validated the architecture end-to-end. The codebase has since moved to the JSON-driven config pipeline described in [CONFIG_ARCHITECTURE.md](CONFIG_ARCHITECTURE.md) — the YAML ontology, hand-rolled grammar module, and Pydantic schema have been replaced by `bioconfigs/` JSON files, `bioassert/config/schema.py`, and the data-driven renderer in `bioassert/generator/renderer.py`. Current status is summarized at the top of this document.
+Phase 1 validated the architecture end-to-end. The codebase has since moved to the JSON-driven config pipeline described in [config_architecture.md](config_architecture.md) — the YAML ontology, hand-rolled grammar module, and Pydantic schema have been replaced by `bioconfigs/` JSON files, `bioassert/config/schema.py`, and the data-driven renderer in `bioassert/generator/renderer.py`. Current status is summarized at the top of this document.

@@ -1,4 +1,4 @@
-"""Loader + Pydantic-model invariants (CONFIG_ARCHITECTURE.md §7.1–7.4)."""
+"""Loader + Pydantic-model invariants (config_architecture.md §7.1–7.4)."""
 from __future__ import annotations
 
 import json

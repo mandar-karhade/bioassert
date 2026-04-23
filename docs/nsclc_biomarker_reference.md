@@ -635,7 +635,7 @@ Mention in ontology as lower priority, but include because they appear in resear
 
 ## 9. Recommendations for Phase 1 Implementation
 
-Start the Phase 1 ontology with the **three biomarkers originally specified** (EGFR, ALK, KRAS) from the PROJECT_SPEC.md, but use this document to fill in their full profiles with clinical accuracy. These three give you:
+Start the Phase 1 ontology with the **three biomarkers originally specified** (EGFR, ALK, KRAS) from the project_spec.md, but use this document to fill in their full profiles with clinical accuracy. These three give you:
 
 1. **EGFR** — point mutations with sub-variants, including the compositionally complex ex20ins category. Tests the generator on heterogeneous variant distribution.
 2. **ALK** — gene fusions with fusion partner structure. Tests the generator on a fundamentally different alteration type from mutations.
