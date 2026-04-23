@@ -147,6 +147,24 @@ _L3_SHORTHAND_FRAMES: list[dict] = [
     {"inner": "\t", "sep": "\n"},
 ]
 
+# Heterogeneous L4 frames. Same list structure as L3 but each gene's
+# status is drawn independently from its own population, rendered with
+# the formal positive_phrases / negation_phrases vocabulary. ``final``
+# optionally inserts a coordinator (``"and"`` / ``"or"``) before the
+# last pair; ``final_is_oxford`` controls whether a pre-conjunction
+# comma is kept when the separator is ``", "``.
+_L4_FRAMES: list[dict] = [
+    {"inner": " ", "sep": ", ", "final": "and", "final_is_oxford": True},
+    {"inner": " ", "sep": ", ", "final": "and", "final_is_oxford": False},
+    {"inner": " ", "sep": ", ", "final": None, "final_is_oxford": False},
+    {"inner": " ", "sep": "; ", "final": None, "final_is_oxford": False},
+    {"inner": " was ", "sep": ", ", "final": "and", "final_is_oxford": True},
+    {"inner": " was ", "sep": "; ", "final": None, "final_is_oxford": False},
+    {"inner": ": ", "sep": ", ", "final": None, "final_is_oxford": False},
+    {"inner": ": ", "sep": "; ", "final": None, "final_is_oxford": False},
+    {"inner": " ", "sep": ". ", "final": None, "final_is_oxford": False},
+]
+
 L3_MIN_N = 2
 L3_MAX_N = 4
 L3_OXFORD_PROB = 0.6
@@ -774,3 +792,119 @@ def _render_l3_shorthand(
         frame_template=frame_template,
         complexity_level="L3S",
     )
+
+
+def render_l4_record(
+    biomarker_pool: list[str],
+    profile: PatientProfile,
+    biomarkers: BiomarkerConfig,
+    common: CommonConfig,
+    rng: random.Random,
+    n: Optional[int] = None,
+) -> RenderedRecord:
+    """Render one L4 record: N genes, each with its own independently
+    drawn status.
+
+    Samples N distinct genes (N ∈ [L3_MIN_N, L3_MAX_N], capped at pool size),
+    draws one status per gene from the gene's resolved population, and glues
+    the pairs into a single surface via one of :data:`_L4_FRAMES`. Each
+    :class:`AssertionFact` carries its own gene span AND its own status span
+    — statuses may diverge across facts.
+
+    L4 is prose (formal ``positive_phrases`` / ``negation_phrases`` vocab);
+    variant descriptors and method slots are deferred to L5+. The caller is
+    responsible for pool homogeneity (mutation-class vs expression-class).
+    """
+    pool_size = len(biomarker_pool)
+    if pool_size < L3_MIN_N:
+        raise RenderError(
+            f"L4 pool needs >= {L3_MIN_N} biomarkers, got {pool_size}"
+        )
+    max_n = min(L3_MAX_N, pool_size)
+    if n is None:
+        n = rng.randint(L3_MIN_N, max_n)
+    elif not L3_MIN_N <= n <= max_n:
+        raise RenderError(f"n must be in [{L3_MIN_N}, {max_n}], got {n}")
+
+    gene_names: list[str] = rng.sample(biomarker_pool, n)
+    gene_surfaces: list[str] = []
+    statuses: list[str] = []
+    status_surfaces: list[str] = []
+
+    for name in gene_names:
+        b = biomarkers.get(name)
+        population = resolve_population(b, profile)
+        status = sample_status(population, rng)
+        form_id = _bare_gene_name_form(b, rng)
+        gene_surface = b.name_forms.realizations[form_id]
+        _, raw = _sample_status_phrase(status, common, rng, complexity_level="L1")
+        status_surface = expand_placeholders(raw, {"gene": gene_surface})
+        gene_surfaces.append(gene_surface)
+        statuses.append(status)
+        status_surfaces.append(status_surface)
+
+    frame = rng.choice(_L4_FRAMES)
+    inner: str = frame["inner"]
+    sep: str = frame["sep"]
+    final: Optional[str] = frame["final"]
+    use_oxford: bool = frame["final_is_oxford"]
+
+    pieces: list[str] = []
+    assertions: list[AssertionFact] = []
+    pos = 0
+    last_idx = len(gene_names) - 1
+    for i, (name, gene_surface, status, status_surface) in enumerate(
+        zip(gene_names, gene_surfaces, statuses, status_surfaces)
+    ):
+        if i > 0:
+            joiner = _l4_joiner(sep, final, use_oxford, i, last_idx)
+            pieces.append(joiner)
+            pos += len(joiner)
+        gene_start = pos
+        pieces.append(gene_surface)
+        pos += len(gene_surface)
+        gene_end = pos
+        pieces.append(inner)
+        pos += len(inner)
+        status_start = pos
+        pieces.append(status_surface)
+        pos += len(status_surface)
+        status_end = pos
+        assertions.append(
+            AssertionFact(
+                gene=name,
+                status=status,
+                spans={
+                    "gene": (gene_start, gene_end),
+                    "status": (status_start, status_end),
+                },
+            )
+        )
+
+    pieces.append(".")
+    sentence = "".join(pieces)
+    frame_template = f"{{gene}}{inner}{{status}}{sep}"
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=tuple(assertions),
+        frame_template=frame_template,
+        complexity_level="L4",
+    )
+
+
+def _l4_joiner(
+    sep: str, final: Optional[str], use_oxford: bool, i: int, last_idx: int
+) -> str:
+    """Choose the glue that precedes pair ``i`` (1-indexed past the first).
+
+    ``final`` inserts a coordinator before the last pair. For comma-separated
+    frames, ``use_oxford=True`` keeps the pre-coordinator comma
+    (``", and "``); otherwise the comma is dropped (``" and "``). Non-comma
+    separators ignore the Oxford toggle.
+    """
+    is_last = i == last_idx
+    if is_last and final is not None:
+        if sep == ", ":
+            return ", and " if use_oxford else " and "
+        return f"{sep}{final} "
+    return sep
