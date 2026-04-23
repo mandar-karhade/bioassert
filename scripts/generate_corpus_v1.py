@@ -39,6 +39,7 @@ from bioassert.generator.renderer import (
     render_l3_record,
     render_l4_record,
     render_l5_record,
+    render_l6_record,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,7 +47,7 @@ COMMON_PATH = ROOT / "bioconfigs" / "common_variations.json"
 BIOMARKERS_PATH = ROOT / "bioconfigs" / "biomarkers.json"
 # Keep generated corpora separated by sub-phase so prior snapshots survive
 # when we regen for a new sub-phase. Override via --output-dir for ad-hoc runs.
-OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.7"
+OUTPUT_DIR = ROOT / "datasets" / "v1_phase3.8"
 
 MUTATION_BIOMARKERS: tuple[str, ...] = (
     "EGFR",
@@ -77,6 +78,7 @@ DEFAULT_L3S_FRACTION = 0.0
 DEFAULT_L4_FRACTION = 0.0
 DEFAULT_L4S_FRACTION = 0.0
 DEFAULT_L5_FRACTION = 0.0
+DEFAULT_L6_FRACTION = 0.0
 # Compounding tier split (applies only to L3/L3S/L4/L4S/L5 records). The
 # split is a binary low/high per user feedback 2026-04-23; medium was
 # collapsed into high. Defaults to 0.5/0.5 and must sum to 1.0.
@@ -117,6 +119,7 @@ def _iter_records(
     l4_fraction: float,
     l4s_fraction: float,
     l5_fraction: float,
+    l6_fraction: float,
     compound_low: float,
     compound_high: float,
 ) -> Iterator[tuple[PatientProfile, str, str, PostProcessedRecord]]:
@@ -130,6 +133,7 @@ def _iter_records(
         l4_bound = l3s_bound + l4_fraction
         l4s_bound = l4_bound + l4s_fraction
         l5_bound = l4s_bound + l5_fraction
+        l6_bound = l5_bound + l6_fraction
         if roll < l3s_bound:
             tier = _sample_tier(rng, compound_low)
             pool = _compound_pool(tier, rng)
@@ -176,11 +180,24 @@ def _iter_records(
             )
             yield profile, first_fact.gene, first_matched_key, post
             continue
+        if roll < l6_bound:
+            # L6 is single-gene regardless of shape; pool is the full panel
+            # so any biomarker can surface with temporal/certainty qualifiers.
+            rendered = render_l6_record(
+                list(PANEL_BIOMARKERS), profile, biomarkers, common, rng
+            )
+            post = apply_technical_noise(rendered, common, rng)
+            first_fact = rendered.assertions[0]
+            _, first_matched_key = resolve_status_distribution(
+                biomarkers.get(first_fact.gene), profile
+            )
+            yield profile, first_fact.gene, first_matched_key, post
+            continue
         gene = rng.choice(PANEL_BIOMARKERS)
         _, matched_key = resolve_status_distribution(
             biomarkers.get(gene), profile
         )
-        complexity_level = "L2" if roll < l5_bound + l2_fraction else "L1"
+        complexity_level = "L2" if roll < l6_bound + l2_fraction else "L1"
         rendered = render_l1_record(
             gene, profile, biomarkers, common, rng,
             complexity_level=complexity_level,
@@ -209,6 +226,8 @@ def _record_to_dict(
                 "test_method": fact.test_method,
                 "measurement_value": fact.measurement_value,
                 "polarity_scope": fact.polarity_scope,
+                "temporal": fact.temporal,
+                "certainty": fact.certainty,
                 "frame_template": record.frame_template,
                 "matched_population_key": matched_key,
             }
@@ -228,6 +247,20 @@ def _record_to_dict(
         "labeled_spans": labeled_spans,
         "post_process": record.applied_transforms,
     }
+
+
+def _classify_l6_shape(assertions: tuple) -> str:
+    """Derive the L6 structural shape from the qualifier fields on the facts.
+
+    - ``temporal``: 2 facts, both ``temporal`` set, both ``certainty`` None
+    - ``certainty``: 1 fact, ``certainty`` set
+    - ``combined``: 2 facts, both qualifiers set on each fact
+    """
+    if len(assertions) == 1:
+        return "certainty"
+    if any(a.certainty is not None for a in assertions):
+        return "combined"
+    return "temporal"
 
 
 def _two_sigma_within(
@@ -288,6 +321,16 @@ def main() -> None:
         help="Fraction of records to render as L5 negation-scope",
     )
     parser.add_argument(
+        "--l6-fraction",
+        type=float,
+        default=DEFAULT_L6_FRACTION,
+        help=(
+            "Fraction of records to render as L6 temporal/certainty "
+            "(single-gene, shape drawn uniformly from temporal/certainty/"
+            "combined)"
+        ),
+    )
+    parser.add_argument(
         "--compound-low",
         type=float,
         default=DEFAULT_COMPOUND_LOW,
@@ -314,6 +357,7 @@ def main() -> None:
         ("--l4-fraction", args.l4_fraction),
         ("--l4s-fraction", args.l4s_fraction),
         ("--l5-fraction", args.l5_fraction),
+        ("--l6-fraction", args.l6_fraction),
         ("--compound-low", args.compound_low),
         ("--compound-high", args.compound_high),
     ):
@@ -326,11 +370,13 @@ def main() -> None:
         + args.l4_fraction
         + args.l4s_fraction
         + args.l5_fraction
+        + args.l6_fraction
     )
     if total > 1.0:
         parser.error(
             "--l2-fraction + --l3-fraction + --l3s-fraction + "
-            "--l4-fraction + --l4s-fraction + --l5-fraction must be <= 1.0"
+            "--l4-fraction + --l4s-fraction + --l5-fraction + "
+            "--l6-fraction must be <= 1.0"
         )
     if abs(args.compound_low + args.compound_high - 1.0) > 1e-6:
         parser.error(
@@ -349,6 +395,11 @@ def main() -> None:
     # Compound-only: tier counts overall and per complexity level.
     compound_tier_counts: Counter = Counter()
     tier_by_level: dict[str, Counter] = defaultdict(Counter)
+    # L6-only: shape counts. Infer shape from the fact qualifiers since the
+    # record doesn't carry an explicit shape label (temporal: 2 facts both
+    # have ``temporal``, ``certainty`` all None; certainty: 1 fact has
+    # ``certainty``; combined: 2 facts, both qualifiers set).
+    l6_shape_counts: Counter = Counter()
 
     sentences_seen: Counter = Counter()
     span_violations = 0
@@ -364,6 +415,7 @@ def main() -> None:
                 args.l4_fraction,
                 args.l4s_fraction,
                 args.l5_fraction,
+                args.l6_fraction,
                 args.compound_low,
                 args.compound_high,
             )
@@ -396,6 +448,8 @@ def main() -> None:
             if record.complexity_level in _COMPOUND_LEVELS:
                 compound_tier_counts[record.compounding_tier] += 1
                 tier_by_level[record.complexity_level][record.compounding_tier] += 1
+            if record.complexity_level == "L6":
+                l6_shape_counts[_classify_l6_shape(record.assertions)] += 1
 
     common, biomarkers = load_configs(COMMON_PATH, BIOMARKERS_PATH)
 
@@ -467,6 +521,11 @@ def main() -> None:
         "l5_fraction_observed": round(
             complexity_counts.get("L5", 0) / max(args.n, 1), 4
         ),
+        "l6_fraction_requested": args.l6_fraction,
+        "l6_fraction_observed": round(
+            complexity_counts.get("L6", 0) / max(args.n, 1), 4
+        ),
+        "l6_shape_counts": dict(l6_shape_counts),
         "complexity_counts": dict(complexity_counts),
         "compound_low_fraction_requested": args.compound_low,
         "compound_low_fraction_observed": _tier_fraction("low"),
