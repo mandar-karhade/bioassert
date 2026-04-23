@@ -147,7 +147,7 @@ def _iter_records(
                 complexity_level=level,
                 compounding_tier=tier,
             )
-            post = apply_technical_noise(rendered, common, rng)
+            post = apply_technical_noise(rendered, common, biomarkers, rng)
             first_fact = rendered.assertions[0]
             _, first_matched_key = resolve_status_distribution(
                 biomarkers.get(first_fact.gene), profile
@@ -163,7 +163,7 @@ def _iter_records(
                 complexity_level=level,
                 compounding_tier=tier,
             )
-            post = apply_technical_noise(rendered, common, rng)
+            post = apply_technical_noise(rendered, common, biomarkers, rng)
             first_fact = rendered.assertions[0]
             _, first_matched_key = resolve_status_distribution(
                 biomarkers.get(first_fact.gene), profile
@@ -177,7 +177,7 @@ def _iter_records(
                 pool, profile, biomarkers, common, rng,
                 compounding_tier=tier,
             )
-            post = apply_technical_noise(rendered, common, rng)
+            post = apply_technical_noise(rendered, common, biomarkers, rng)
             first_fact = rendered.assertions[0]
             _, first_matched_key = resolve_status_distribution(
                 biomarkers.get(first_fact.gene), profile
@@ -190,7 +190,7 @@ def _iter_records(
             rendered = render_l6_record(
                 list(PANEL_BIOMARKERS), profile, biomarkers, common, rng
             )
-            post = apply_technical_noise(rendered, common, rng)
+            post = apply_technical_noise(rendered, common, biomarkers, rng)
             first_fact = rendered.assertions[0]
             _, first_matched_key = resolve_status_distribution(
                 biomarkers.get(first_fact.gene), profile
@@ -203,7 +203,7 @@ def _iter_records(
             rendered = render_l7_record(
                 list(PANEL_BIOMARKERS), profile, biomarkers, common, rng
             )
-            post = apply_technical_noise(rendered, common, rng)
+            post = apply_technical_noise(rendered, common, biomarkers, rng)
             first_fact = rendered.assertions[0]
             _, first_matched_key = resolve_status_distribution(
                 biomarkers.get(first_fact.gene), profile
@@ -219,7 +219,7 @@ def _iter_records(
             gene, profile, biomarkers, common, rng,
             complexity_level=complexity_level,
         )
-        post = apply_technical_noise(rendered, common, rng)
+        post = apply_technical_noise(rendered, common, biomarkers, rng)
         yield profile, gene, matched_key, post
 
 

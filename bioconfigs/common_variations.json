@@ -381,6 +381,13 @@
         "canonical": 0.96,
         "hyphen_linebreak": 0.04
       }
+    },
+    "abbreviation_inconsistency": {
+      "description": "When a rendered record contains two or more labeled mentions of the same canonical gene (e.g., L6 temporal_frame2: 'ERBB2 was positive at diagnosis; ERBB2 was negative post-TKI.'), re-render mention #2+ with an alternate alias drawn from biomarkers.json name_forms.variations, excluding mention #1's surface. Models real pathology-report drift between equivalent abbreviations (ERBB2/HER2/HER-2, PD-L1/PDL1/PD L1). Single-mention records are unaffected.",
+      "distribution": {
+        "canonical": 0.70,
+        "mixed": 0.30
+      }
     }
   }
 }

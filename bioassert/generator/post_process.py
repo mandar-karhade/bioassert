@@ -23,10 +23,10 @@ from __future__ import annotations
 
 import random
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
-from bioassert.config.loader import CommonConfig
+from bioassert.config.loader import BiomarkerConfig, CommonConfig
 from bioassert.config.schema import PostProcessTransformations
 from bioassert.generator.renderer import AssertionFact, RenderedRecord
 
@@ -85,9 +85,15 @@ class PostProcessError(RuntimeError):
 def apply_technical_noise(
     record: RenderedRecord,
     common: CommonConfig,
+    biomarkers: BiomarkerConfig,
     rng: random.Random,
 ) -> PostProcessedRecord:
-    """Run the four noise categories in order and return the new record."""
+    """Run the technical-noise categories in order and return the new record.
+
+    ``biomarkers`` is required by the Layer 5 ``abbreviation_inconsistency``
+    transform, which may re-render mention #2+ of a repeated gene with an
+    alternate alias drawn from ``biomarker.name_forms.variations``.
+    """
     noise = common.categories.get("technical_noise")
     if not isinstance(noise, PostProcessTransformations):
         raise KeyError(
@@ -95,10 +101,8 @@ def apply_technical_noise(
             "post_process_transformations block"
         )
 
-    if len(record.assertions) != 1:
-        return _passthrough_post_process(record)
-    if len(record.sentences) > 1:
-        return _passthrough_post_process(record)
+    if len(record.assertions) != 1 or len(record.sentences) > 1:
+        return _passthrough_post_process(record, noise, biomarkers, rng)
     original_fact = record.assertions[0]
     sentence = record.sentence
     spans = dict(original_fact.spans)
@@ -148,24 +152,23 @@ def apply_technical_noise(
         if mode != "canonical":
             sentence, spans = _apply_pdf_artifact(sentence, spans, mode, rng)
 
-    new_fact = AssertionFact(
-        gene=original_fact.gene,
-        status=original_fact.status,
-        spans=spans,
-        variant_id=original_fact.variant_id,
-        negative_form_id=original_fact.negative_form_id,
-        clone_id=original_fact.clone_id,
-        test_method=original_fact.test_method,
-        measurement_value=original_fact.measurement_value,
-        polarity_scope=original_fact.polarity_scope,
-        temporal=original_fact.temporal,
-        certainty=original_fact.certainty,
-        sentence_index=original_fact.sentence_index,
-    )
+    new_fact = replace(original_fact, spans=spans)
+    assertions: tuple[AssertionFact, ...] = (new_fact,)
+
+    if "abbreviation_inconsistency" in noise.categories:
+        mode = _sample_mode(
+            noise.categories["abbreviation_inconsistency"].distribution, rng
+        )
+        applied["abbreviation_inconsistency"] = mode
+        if mode == "mixed":
+            sentence, assertions = _apply_abbreviation_inconsistency(
+                sentence, assertions, biomarkers, rng
+            )
+
     return PostProcessedRecord(
         sentence=sentence,
         sentences=(sentence,),
-        assertions=(new_fact,),
+        assertions=assertions,
         frame_template=record.frame_template,
         applied_transforms=applied,
         complexity_level=record.complexity_level,
@@ -173,15 +176,23 @@ def apply_technical_noise(
     )
 
 
-def _passthrough_post_process(record: RenderedRecord) -> PostProcessedRecord:
-    """Return a PostProcessedRecord that copies ``record`` unchanged.
+def _passthrough_post_process(
+    record: RenderedRecord,
+    noise: PostProcessTransformations,
+    biomarkers: BiomarkerConfig,
+    rng: random.Random,
+) -> PostProcessedRecord:
+    """Copy ``record`` forward for multi-assertion / multi-sentence flows.
 
-    Used for multi-assertion records (L3+) until Sub-phase 3.9 expands the
-    noise system to coordinate span updates across N facts. Downstream
-    consumers see ``applied_transforms`` marked ``"skipped"`` for every
-    category so the schema stays consistent.
+    The six typographic noise categories (whitespace, case, hyphenation,
+    punctuation, OCR, PDF artifact) still require cross-fact span
+    coordination and ship as ``"skipped"`` until a later sub-phase expands
+    the multi-fact noise system. The Layer 5 ``abbreviation_inconsistency``
+    category IS applied here — its effect is local to individual gene
+    spans, so span coordination is straightforward even across multiple
+    facts in the same record.
     """
-    skipped = {
+    applied: dict[str, str] = {
         "hyphenation_gene_names": "skipped",
         "whitespace": "skipped",
         "case_variation": "skipped",
@@ -189,12 +200,31 @@ def _passthrough_post_process(record: RenderedRecord) -> PostProcessedRecord:
         "ocr_corruption": "skipped",
         "pdf_artifact": "skipped",
     }
+    sentence = record.sentence
+    assertions = record.assertions
+    multi_sentence = len(record.sentences) > 1
+
+    if "abbreviation_inconsistency" in noise.categories:
+        if multi_sentence:
+            applied["abbreviation_inconsistency"] = "skipped"
+        else:
+            mode = _sample_mode(
+                noise.categories["abbreviation_inconsistency"].distribution,
+                rng,
+            )
+            applied["abbreviation_inconsistency"] = mode
+            if mode == "mixed":
+                sentence, assertions = _apply_abbreviation_inconsistency(
+                    sentence, assertions, biomarkers, rng
+                )
+
+    sentences = record.sentences if multi_sentence else (sentence,)
     return PostProcessedRecord(
-        sentence=record.sentence,
-        sentences=record.sentences,
-        assertions=record.assertions,
+        sentence=sentence,
+        sentences=sentences,
+        assertions=assertions,
         frame_template=record.frame_template,
-        applied_transforms=skipped,
+        applied_transforms=applied,
         complexity_level=record.complexity_level,
         compounding_tier=record.compounding_tier,
     )
@@ -526,6 +556,127 @@ def _apply_pdf_artifact(
     new_sentence = sentence[:pick] + PDF_HYPHEN_LINEBREAK + sentence[pick:]
     new_spans = _shift_spans(spans, pick, len(PDF_HYPHEN_LINEBREAK))
     return new_sentence, new_spans
+
+
+def _apply_abbreviation_inconsistency(
+    sentence: str,
+    assertions: tuple[AssertionFact, ...],
+    biomarkers: BiomarkerConfig,
+    rng: random.Random,
+) -> tuple[str, tuple[AssertionFact, ...]]:
+    """Re-render mention #2+ of any repeated gene with an alternate alias.
+
+    For each canonical gene mentioned in ``assertions`` with two or more
+    distinct labeled gene spans, keep mention #1 (earliest start) verbatim
+    and draw a replacement surface for mention #2+ from
+    ``biomarker.name_forms.variations`` (weighted), excluding mention #1's
+    surface. Substring-replace at the gene span and shift all downstream
+    spans on every fact by the length delta.
+
+    No-op cases (silent, by design — matches ``_ocr_artifact`` pattern):
+      * No gene has ≥2 distinct labeled spans.
+      * Excluding mention #1's surface leaves zero viable aliases.
+      * An assertion's spans dict lacks a ``gene`` key.
+    """
+    gene_mentions = _collect_gene_mentions(assertions)
+    if not any(len(spans) >= 2 for spans in gene_mentions.values()):
+        return sentence, assertions
+
+    # Process each repeated gene. To keep span bookkeeping simple, handle
+    # one swap at a time (latest-first across the whole sentence) so earlier
+    # spans never move during a given swap.
+    working_sentence = sentence
+    working_assertions: list[AssertionFact] = list(assertions)
+
+    swap_plan: list[tuple[int, int, str]] = []  # (span_start, span_end, new_surface)
+    for gene, span_fact_pairs in gene_mentions.items():
+        if len(span_fact_pairs) < 2:
+            continue
+        span_fact_pairs_sorted = sorted(span_fact_pairs, key=lambda p: p[0])
+        mention_1_start, mention_1_end, _ = span_fact_pairs_sorted[0]
+        mention_1_surface = sentence[mention_1_start:mention_1_end]
+        try:
+            biomarker = biomarkers.get(gene)
+        except KeyError:
+            continue
+        variations = biomarker.name_forms.variations
+        realizations = biomarker.name_forms.realizations
+        excluded_ids = {
+            vid for vid, surface in realizations.items()
+            if surface == mention_1_surface
+        }
+        eligible = [
+            (vid, variations[vid])
+            for vid in variations
+            if vid not in excluded_ids
+        ]
+        if not eligible:
+            continue
+        for start, end, _fact_index in span_fact_pairs_sorted[1:]:
+            weights = [w for _, w in eligible]
+            ids = [vid for vid, _ in eligible]
+            chosen_id = rng.choices(ids, weights=weights, k=1)[0]
+            new_surface = realizations[chosen_id]
+            swap_plan.append((start, end, new_surface))
+
+    if not swap_plan:
+        return sentence, assertions
+
+    # Apply swaps latest-first so earlier span positions stay valid.
+    swap_plan.sort(key=lambda t: t[0], reverse=True)
+    current_spans_per_fact: list[dict[str, tuple[int, int]]] = [
+        dict(f.spans) for f in working_assertions
+    ]
+
+    for start, end, new_surface in swap_plan:
+        old_len = end - start
+        delta = len(new_surface) - old_len
+        working_sentence = (
+            working_sentence[:start] + new_surface + working_sentence[end:]
+        )
+        for i, spans in enumerate(current_spans_per_fact):
+            new_spans: dict[str, tuple[int, int]] = {}
+            for name, (s, e) in spans.items():
+                if s == start and e == end and name == "gene":
+                    new_spans[name] = (start, start + len(new_surface))
+                elif s >= end:
+                    new_spans[name] = (s + delta, e + delta)
+                elif e > start and s < start:
+                    # Span straddles the swap region — should never happen
+                    # because swaps are at whole gene spans. Defensive no-op.
+                    new_spans[name] = (s, e)
+                else:
+                    new_spans[name] = (s, e)
+            current_spans_per_fact[i] = new_spans
+
+    new_assertions = tuple(
+        replace(fact, spans=current_spans_per_fact[i])
+        for i, fact in enumerate(working_assertions)
+    )
+    return working_sentence, new_assertions
+
+
+def _collect_gene_mentions(
+    assertions: tuple[AssertionFact, ...],
+) -> dict[str, list[tuple[int, int, int]]]:
+    """Map canonical gene → list of ``(span_start, span_end, fact_index)``
+    for every DISTINCT labeled gene span, keeping only the first fact_index
+    per (start, end) pair (facts that share a span — e.g. L6 frame1 — are
+    collapsed to a single mention).
+    """
+    out: dict[str, list[tuple[int, int, int]]] = {}
+    seen_spans_per_gene: dict[str, set[tuple[int, int]]] = {}
+    for i, fact in enumerate(assertions):
+        if "gene" not in fact.spans:
+            continue
+        span = fact.spans["gene"]
+        gene = fact.gene
+        seen = seen_spans_per_gene.setdefault(gene, set())
+        if span in seen:
+            continue
+        seen.add(span)
+        out.setdefault(gene, []).append((span[0], span[1], i))
+    return out
 
 
 __all__ = [
