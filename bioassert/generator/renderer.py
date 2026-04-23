@@ -43,6 +43,18 @@ from bioassert.generator.sampler import (
 
 _PLACEHOLDER_RE = re.compile(r"\{([^{}]+)\}")
 
+# Name forms containing any of these whole-words are excluded from L3 rendering:
+# they embed a status or variant-type descriptor ("EGFR mutation",
+# "ALK rearrangement", "ALK-positive") which conflicts with L3's "bare gene
+# names only" rule. "mutational burden" / "mutational load" survive because
+# \bmutation\b does not match "mutational".
+_L3_NAME_FORM_BLOCKLIST = re.compile(
+    r"\b(mutation|mutations|fusion|fusions|alteration|alterations|"
+    r"rearrangement|rearrangements|translocation|translocations|"
+    r"amplification|amplifications|expression|positive|negative)\b",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class AssertionFact:
@@ -110,6 +122,20 @@ _L2_FRAMES: list[dict] = [
     {"template": "{gene} ({status})", "requires_variant": False, "has_method": False},
     {"template": "{gene}\t{status}", "requires_variant": False, "has_method": False},
 ]
+
+_L3_FRAMES: list[dict] = [
+    {"template": "{gene_list} were {status}."},
+    {"template": "{gene_list} are {status}."},
+    {"template": "{gene_list}: {status}."},
+    {"template": "{gene_list} - {status}."},
+    {"template": "Results for {gene_list}: {status}."},
+    {"template": "{gene_list} showed {status}."},
+    {"template": "{gene_list} {status}."},
+]
+
+L3_MIN_N = 2
+L3_MAX_N = 4
+L3_OXFORD_PROB = 0.6
 
 VARIANT_FRAME_PROB = 0.55
 METHOD_FRAME_PROB = 0.35
@@ -504,3 +530,155 @@ def _format_measurement(value: float) -> str:
     if float(value).is_integer():
         return str(int(value))
     return f"{value:.1f}"
+
+
+def _bare_gene_name_form(
+    biomarker: Biomarker, rng: random.Random
+) -> str:
+    """Sample a name_form whose surface is a bare gene identifier.
+
+    Excludes realizations that embed alteration-type or status keywords
+    (mutation, fusion, rearrangement, positive, ...). L3 frames carry the
+    status in a separate slot, so forms like ``"ALK-positive"`` or
+    ``"KRAS mutation"`` would double-mark the assertion. When every
+    realization is blocklisted (defensive fallback), falls back to the
+    full distribution.
+    """
+    eligible: dict[str, float] = {}
+    for vid, weight in biomarker.name_forms.variations.items():
+        surface = biomarker.name_forms.realizations[vid]
+        if _L3_NAME_FORM_BLOCKLIST.search(surface):
+            continue
+        eligible[vid] = weight
+    if not eligible:
+        return sample_biomarker_name_form(biomarker, rng, None)
+    keys = list(eligible)
+    weights = [eligible[k] for k in keys]
+    return rng.choices(keys, weights=weights, k=1)[0]
+
+
+def _coordinate_gene_list(
+    gene_surfaces: list[str],
+    rng: random.Random,
+    oxford_prob: float = L3_OXFORD_PROB,
+) -> tuple[str, list[tuple[int, int]]]:
+    """Join ``gene_surfaces`` into an English list and return per-gene spans.
+
+    Two genes → ``"A and B"``. Three or more → ``"A, B, and C"`` (Oxford) or
+    ``"A, B and C"`` (no Oxford), picked by Bernoulli on ``oxford_prob``. The
+    returned positions are ``(start, end)`` tuples into the joined string for
+    each input surface, in order.
+    """
+    if len(gene_surfaces) < 2:
+        raise RenderError(
+            f"gene list needs at least 2 surfaces, got {len(gene_surfaces)}"
+        )
+    if len(gene_surfaces) == 2:
+        joined = f"{gene_surfaces[0]} and {gene_surfaces[1]}"
+        first_end = len(gene_surfaces[0])
+        second_start = first_end + len(" and ")
+        return joined, [
+            (0, first_end),
+            (second_start, second_start + len(gene_surfaces[1])),
+        ]
+
+    use_oxford = rng.random() < oxford_prob
+    prefix_parts = gene_surfaces[:-1]
+    last = gene_surfaces[-1]
+    prefix = ", ".join(prefix_parts)
+    sep = ", and " if use_oxford else " and "
+    joined = prefix + sep + last
+
+    positions: list[tuple[int, int]] = []
+    pos = 0
+    for i, surface in enumerate(prefix_parts):
+        positions.append((pos, pos + len(surface)))
+        pos += len(surface)
+        if i < len(prefix_parts) - 1:
+            pos += len(", ")
+    pos += len(sep)
+    positions.append((pos, pos + len(last)))
+    return joined, positions
+
+
+def render_l3_record(
+    biomarker_pool: list[str],
+    profile: PatientProfile,
+    biomarkers: BiomarkerConfig,
+    common: CommonConfig,
+    rng: random.Random,
+    n: Optional[int] = None,
+) -> RenderedRecord:
+    """Render one L3 record: N genes share one status in one sentence.
+
+    Samples N distinct genes from ``biomarker_pool`` (N ∈ [L3_MIN_N, L3_MAX_N],
+    capped at pool size), draws one shared status from the first gene's resolved
+    population, and renders an L3 frame with a coordinated gene list.
+
+    Each returned :class:`AssertionFact` carries its own gene span and shares
+    the single status span. L3 never emits variant descriptors or method slots
+    — those land in L4/L5. The caller is responsible for keeping the pool
+    homogeneous (mutation-class vs expression-class); the renderer does not
+    enforce this.
+    """
+    pool_size = len(biomarker_pool)
+    if pool_size < L3_MIN_N:
+        raise RenderError(
+            f"L3 pool needs >= {L3_MIN_N} biomarkers, got {pool_size}"
+        )
+    max_n = min(L3_MAX_N, pool_size)
+    if n is None:
+        n = rng.randint(L3_MIN_N, max_n)
+    elif not L3_MIN_N <= n <= max_n:
+        raise RenderError(f"n must be in [{L3_MIN_N}, {max_n}], got {n}")
+
+    gene_names: list[str] = rng.sample(biomarker_pool, n)
+    first_biomarker = biomarkers.get(gene_names[0])
+    population = resolve_population(first_biomarker, profile)
+    status = sample_status(population, rng)
+
+    gene_surfaces: list[str] = []
+    for name in gene_names:
+        b = biomarkers.get(name)
+        form_id = _bare_gene_name_form(b, rng)
+        gene_surfaces.append(b.name_forms.realizations[form_id])
+
+    gene_list_surface, gene_positions_in_list = _coordinate_gene_list(
+        gene_surfaces, rng
+    )
+
+    _, status_surface_raw = _sample_status_phrase(
+        status, common, rng, complexity_level="L1"
+    )
+    status_surface = expand_placeholders(
+        status_surface_raw, {"gene": gene_surfaces[0]}
+    )
+
+    frame = rng.choice(_L3_FRAMES)
+    sentence, template_spans = _render_with_spans(
+        frame["template"],
+        {"gene_list": gene_list_surface, "status": status_surface},
+    )
+    gene_list_start = template_spans["gene_list"][0]
+    status_span = template_spans["status"]
+
+    assertions: list[AssertionFact] = []
+    for name, (s, e) in zip(gene_names, gene_positions_in_list):
+        fact_spans: dict[str, tuple[int, int]] = {
+            "gene": (gene_list_start + s, gene_list_start + e),
+            "status": status_span,
+        }
+        assertions.append(
+            AssertionFact(
+                gene=name,
+                status=status,
+                spans=fact_spans,
+            )
+        )
+
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=tuple(assertions),
+        frame_template=frame["template"],
+        complexity_level="L3",
+    )
