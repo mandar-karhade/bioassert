@@ -133,6 +133,20 @@ _L3_FRAMES: list[dict] = [
     {"template": "{gene_list} {status}."},
 ]
 
+# Shorthand/tabular L3 frames. Each gene repeats the status surface, glued
+# by ``inner`` (between gene and its status) and ``sep`` (between pairs).
+# Every gene-status pair gets its own gene span AND its own status span —
+# unlike L3 prose where all facts share a single status span.
+_L3_SHORTHAND_FRAMES: list[dict] = [
+    {"inner": " ", "sep": ", "},
+    {"inner": " ", "sep": "; "},
+    {"inner": " ", "sep": " | "},
+    {"inner": " ", "sep": "\n"},
+    {"inner": ": ", "sep": ", "},
+    {"inner": ": ", "sep": "\n"},
+    {"inner": "\t", "sep": "\n"},
+]
+
 L3_MIN_N = 2
 L3_MAX_N = 4
 L3_OXFORD_PROB = 0.6
@@ -608,19 +622,27 @@ def render_l3_record(
     common: CommonConfig,
     rng: random.Random,
     n: Optional[int] = None,
+    complexity_level: str = "L3",
 ) -> RenderedRecord:
-    """Render one L3 record: N genes share one status in one sentence.
+    """Render one L3 record: N genes share one status.
 
     Samples N distinct genes from ``biomarker_pool`` (N ∈ [L3_MIN_N, L3_MAX_N],
     capped at pool size), draws one shared status from the first gene's resolved
-    population, and renders an L3 frame with a coordinated gene list.
+    population, and renders either a prose frame (``complexity_level="L3"``) or
+    a shorthand/tabular frame (``complexity_level="L3S"``).
 
-    Each returned :class:`AssertionFact` carries its own gene span and shares
-    the single status span. L3 never emits variant descriptors or method slots
-    — those land in L4/L5. The caller is responsible for keeping the pool
-    homogeneous (mutation-class vs expression-class); the renderer does not
-    enforce this.
+    Prose: all facts share one status span (coordinator gene list + single
+    formal status phrase). Shorthand: each fact gets its own status span
+    because the shorthand surface is repeated per gene-status pair.
+
+    L3 never emits variant descriptors or method slots — those land in L4/L5.
+    The caller is responsible for keeping the pool homogeneous
+    (mutation-class vs expression-class); the renderer does not enforce this.
     """
+    if complexity_level not in ("L3", "L3S"):
+        raise RenderError(
+            f"complexity_level must be 'L3' or 'L3S', got {complexity_level!r}"
+        )
     pool_size = len(biomarker_pool)
     if pool_size < L3_MIN_N:
         raise RenderError(
@@ -642,6 +664,11 @@ def render_l3_record(
         b = biomarkers.get(name)
         form_id = _bare_gene_name_form(b, rng)
         gene_surfaces.append(b.name_forms.realizations[form_id])
+
+    if complexity_level == "L3S":
+        return _render_l3_shorthand(
+            gene_names, gene_surfaces, status, common, rng
+        )
 
     gene_list_surface, gene_positions_in_list = _coordinate_gene_list(
         gene_surfaces, rng
@@ -681,4 +708,69 @@ def render_l3_record(
         assertions=tuple(assertions),
         frame_template=frame["template"],
         complexity_level="L3",
+    )
+
+
+def _render_l3_shorthand(
+    gene_names: list[str],
+    gene_surfaces: list[str],
+    status: str,
+    common: CommonConfig,
+    rng: random.Random,
+) -> RenderedRecord:
+    """Build the shorthand/tabular L3 surface with distributive status spans.
+
+    The shorthand status surface (e.g. ``"-"``, ``"neg"``, ``"+"``) is drawn
+    once and repeated per gene. Each returned :class:`AssertionFact` owns its
+    own ``(gene, status)`` span pair. When the sampled ``status`` has no
+    shorthand vocabulary (equivocal / not_tested), the formal phrase category
+    is used — the resulting surface is longer but the pair structure is
+    preserved.
+    """
+    _, status_surface_raw = _sample_status_phrase(
+        status, common, rng, complexity_level="L2"
+    )
+    status_surface = expand_placeholders(
+        status_surface_raw, {"gene": gene_surfaces[0]}
+    )
+
+    frame = rng.choice(_L3_SHORTHAND_FRAMES)
+    inner = frame["inner"]
+    sep = frame["sep"]
+
+    pieces: list[str] = []
+    assertions: list[AssertionFact] = []
+    pos = 0
+    for i, (name, gene_surface) in enumerate(zip(gene_names, gene_surfaces)):
+        if i > 0:
+            pieces.append(sep)
+            pos += len(sep)
+        gene_start = pos
+        pieces.append(gene_surface)
+        pos += len(gene_surface)
+        gene_end = pos
+        pieces.append(inner)
+        pos += len(inner)
+        status_start = pos
+        pieces.append(status_surface)
+        pos += len(status_surface)
+        status_end = pos
+        assertions.append(
+            AssertionFact(
+                gene=name,
+                status=status,
+                spans={
+                    "gene": (gene_start, gene_end),
+                    "status": (status_start, status_end),
+                },
+            )
+        )
+
+    sentence = "".join(pieces)
+    frame_template = f"{{gene}}{inner}{{status}}{sep}"
+    return RenderedRecord(
+        sentence=sentence,
+        assertions=tuple(assertions),
+        frame_template=frame_template,
+        complexity_level="L3S",
     )
