@@ -38,6 +38,7 @@ from bioassert.generator.renderer import (
     render_l7_record,
 )
 from bioassert.project import Project, ProjectError
+from bioassert.validator import ValidationError, validate_run, write_validation_report
 
 MUTATION_BIOMARKERS: tuple[str, ...] = (
     "EGFR",
@@ -316,6 +317,22 @@ def _build_parser() -> argparse.ArgumentParser:
         "--compound-high", type=float, default=DEFAULT_COMPOUND_HIGH,
         help="Fraction of compound records at the 'high' tier (3+ genes).",
     )
+    gen.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip the post-generation validation_report.json step.",
+    )
+
+    val = subparsers.add_parser(
+        "validate",
+        help="Validate a completed run directory against its snapshotted configs.",
+    )
+    val.add_argument(
+        "run_dir",
+        type=Path,
+        help="Path to a run directory "
+             "(e.g., projects/<name>/outputs/run_001_<tag>_<UTC>/).",
+    )
     return parser
 
 
@@ -524,11 +541,57 @@ def _generate(args: argparse.Namespace) -> int:
     print(f"run dir: {run_dir}")
     print(f"corpus : {corpus_path} ({args.n} records)")
     print(f"report : {report_path}")
-    print(f"within-2σ: {within_2sigma}/{total_checks} "
+    print(f"within-2σ (status only): {within_2sigma}/{total_checks} "
           f"({100 * within_2sigma / max(total_checks, 1):.1f}%)")
     print(f"span violations: {span_violations}")
     print(f"max identical sentence count: {max_dupe_count} "
           f"({100 * max_dupe_count / max(args.n, 1):.2f}%)")
+
+    if not args.skip_validation:
+        vreport_path = write_validation_report(run_dir)
+        vreport = json.loads(vreport_path.read_text(encoding="utf-8"))
+        summary = vreport["summary"]
+        print(
+            f"validation: {summary['within_2sigma_pass']}/{summary['buckets_checked']} "
+            f"buckets pass ({100 * summary['pass_rate']:.1f}%) across "
+            f"{summary['categories_checked']} categories "
+            f"({vreport_path.name})"
+        )
+        if summary["failing_categories"]:
+            print("  failing categories:")
+            for fail in summary["failing_categories"]:
+                print(
+                    f"    - {fail['category_id']} "
+                    f"(n={fail['n']}, failed={fail['failed_buckets']})"
+                )
+    return 0
+
+
+def _validate(args: argparse.Namespace) -> int:
+    run_dir = args.run_dir.expanduser().resolve()
+    try:
+        report_path = write_validation_report(run_dir)
+    except ValidationError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    summary = report["summary"]
+    print(f"run: {report['run_id']}  n_records={report['n_records']}")
+    print(
+        f"validation: {summary['within_2sigma_pass']}/{summary['buckets_checked']} "
+        f"buckets pass ({100 * summary['pass_rate']:.1f}%) across "
+        f"{summary['categories_checked']} categories"
+    )
+    if summary["categories_skipped"]:
+        print(f"  skipped (n=0): {len(summary['categories_skipped'])} categories")
+    if summary["failing_categories"]:
+        print("  failing categories:")
+        for fail in summary["failing_categories"]:
+            print(
+                f"    - {fail['category_id']} "
+                f"(n={fail['n']}, failed={fail['failed_buckets']})"
+            )
+    print(f"wrote {report_path}")
     return 0
 
 
@@ -537,6 +600,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "generate":
         return _generate(args)
+    if args.command == "validate":
+        return _validate(args)
     parser.print_help()
     return 1
 
