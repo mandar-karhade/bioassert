@@ -1,0 +1,393 @@
+{
+  "$schema_version": "1.1",
+  "description": "Surface-form variations shared across all biomarkers. Weights are probabilities (floats summing to 1.0 per category, validated at load time). Slot placeholders in grammar templates reference these categories.",
+  "_changelog": [
+    "v1.1: Added $schema_type discriminator to distinguish weighted_variations from post_process_transformations (technical_noise)"
+  ],
+  "notes": [
+    "All weight distributions sum to 1.0 within tolerance 0.001",
+    "Weights reflect best-estimate clinical corpus priors, not strict measurements",
+    "Calibrate against real-text held-out set in Phase 7",
+    "Bold/italic/underline in pathology reports are not surface variations — they're a formatting layer"
+  ],
+
+  "assertion_verbs": {
+    "$schema_type": "weighted_variations",
+    "description": "Verbs linking biomarker to its status in affirmative contexts",
+    "variations": {
+      "was": 0.18,
+      "is": 0.12,
+      "tested": 0.10,
+      "testing_showed": 0.08,
+      "showed": 0.08,
+      "revealed": 0.07,
+      "demonstrated": 0.05,
+      "identified_as": 0.05,
+      "detected_as": 0.04,
+      "reported_as": 0.04,
+      "returned": 0.04,
+      "came_back": 0.03,
+      "no_verb_colon": 0.08,
+      "no_verb_dash": 0.04
+    },
+    "realizations": {
+      "was": "was",
+      "is": "is",
+      "tested": "tested",
+      "testing_showed": "testing showed",
+      "showed": "showed",
+      "revealed": "revealed",
+      "demonstrated": "demonstrated",
+      "identified_as": "identified as",
+      "detected_as": "detected as",
+      "reported_as": "reported as",
+      "returned": "returned",
+      "came_back": "came back",
+      "no_verb_colon": ":",
+      "no_verb_dash": "—"
+    }
+  },
+
+  "negation_phrases": {
+    "$schema_type": "weighted_variations",
+    "description": "Ways of expressing negative status (status=negative)",
+    "variations": {
+      "negative": 0.28,
+      "not_detected": 0.18,
+      "no_evidence_of": 0.10,
+      "wild_type": 0.10,
+      "wt_abbrev": 0.06,
+      "absent": 0.04,
+      "no_mutation_detected": 0.08,
+      "no_X_identified": 0.05,
+      "none_detected": 0.03,
+      "unremarkable": 0.02,
+      "minus_sign": 0.03,
+      "neg_abbrev": 0.03
+    },
+    "realizations": {
+      "negative": "negative",
+      "not_detected": "not detected",
+      "no_evidence_of": "no evidence of",
+      "wild_type": "wild-type",
+      "wt_abbrev": "WT",
+      "absent": "absent",
+      "no_mutation_detected": "no mutation detected",
+      "no_X_identified": "no {gene} alteration identified",
+      "none_detected": "none detected",
+      "unremarkable": "unremarkable",
+      "minus_sign": "(-)",
+      "neg_abbrev": "neg"
+    }
+  },
+
+  "positive_phrases": {
+    "$schema_type": "weighted_variations",
+    "description": "Ways of expressing positive status (status=positive)",
+    "variations": {
+      "positive": 0.25,
+      "detected": 0.18,
+      "mutated": 0.10,
+      "identified": 0.08,
+      "present": 0.06,
+      "found": 0.06,
+      "observed": 0.04,
+      "plus_sign": 0.04,
+      "pos_abbrev": 0.04,
+      "mutation_present": 0.05,
+      "alteration_detected": 0.05,
+      "confirmed": 0.05
+    },
+    "realizations": {
+      "positive": "positive",
+      "detected": "detected",
+      "mutated": "mutated",
+      "identified": "identified",
+      "present": "present",
+      "found": "found",
+      "observed": "observed",
+      "plus_sign": "(+)",
+      "pos_abbrev": "pos",
+      "mutation_present": "mutation present",
+      "alteration_detected": "alteration detected",
+      "confirmed": "confirmed"
+    }
+  },
+
+  "equivocal_phrases": {
+    "$schema_type": "weighted_variations",
+    "description": "Ways of expressing equivocal/indeterminate status",
+    "variations": {
+      "equivocal": 0.30,
+      "indeterminate": 0.25,
+      "inconclusive": 0.20,
+      "failed_QC": 0.10,
+      "borderline": 0.08,
+      "insufficient_for_analysis": 0.07
+    },
+    "realizations": {
+      "equivocal": "equivocal",
+      "indeterminate": "indeterminate",
+      "inconclusive": "inconclusive",
+      "failed_QC": "failed QC",
+      "borderline": "borderline",
+      "insufficient_for_analysis": "insufficient for analysis"
+    }
+  },
+
+  "not_tested_phrases": {
+    "$schema_type": "weighted_variations",
+    "description": "Ways of expressing that testing did not occur or could not be completed",
+    "variations": {
+      "not_tested": 0.35,
+      "testing_pending": 0.20,
+      "not_performed": 0.15,
+      "insufficient_sample": 0.15,
+      "quantity_not_sufficient": 0.05,
+      "QNS": 0.05,
+      "awaiting_results": 0.05
+    },
+    "realizations": {
+      "not_tested": "not tested",
+      "testing_pending": "testing pending",
+      "not_performed": "not performed",
+      "insufficient_sample": "insufficient sample",
+      "quantity_not_sufficient": "quantity not sufficient",
+      "QNS": "QNS",
+      "awaiting_results": "awaiting results"
+    }
+  },
+
+  "positive_shorthand": {
+    "$schema_type": "weighted_variations",
+    "description": "L2 compact positive surface tokens used in shorthand sentence frames (tabular result lists, terse pathology addenda). Weights reflect observed term-frequency in clinical text not patient prevalence.",
+    "variations": {
+      "plus": 0.35,
+      "parens_plus": 0.20,
+      "pos": 0.20,
+      "positive": 0.10,
+      "plus_slash": 0.05,
+      "detected": 0.05,
+      "pos_dot": 0.05
+    },
+    "realizations": {
+      "plus": "+",
+      "parens_plus": "(+)",
+      "pos": "pos",
+      "positive": "positive",
+      "plus_slash": "+/+",
+      "detected": "detected",
+      "pos_dot": "pos."
+    }
+  },
+
+  "negation_shorthand": {
+    "$schema_type": "weighted_variations",
+    "description": "L2 compact negative surface tokens used in shorthand sentence frames. Weights reflect observed term-frequency in clinical text not patient prevalence.",
+    "variations": {
+      "minus": 0.30,
+      "parens_minus": 0.20,
+      "neg": 0.20,
+      "wt_abbrev": 0.10,
+      "negative": 0.10,
+      "not_detected": 0.05,
+      "neg_dot": 0.05
+    },
+    "realizations": {
+      "minus": "-",
+      "parens_minus": "(-)",
+      "neg": "neg",
+      "wt_abbrev": "WT",
+      "negative": "negative",
+      "not_detected": "not detected",
+      "neg_dot": "neg."
+    }
+  },
+
+  "temporality_modifiers": {
+    "$schema_type": "weighted_variations",
+    "description": "Modifiers expressing when the test occurred relative to current context",
+    "variations": {
+      "none": 0.70,
+      "previously": 0.08,
+      "prior_testing": 0.06,
+      "at_diagnosis": 0.05,
+      "on_repeat_testing": 0.04,
+      "historically": 0.03,
+      "initial_testing": 0.02,
+      "most_recent": 0.02
+    },
+    "realizations": {
+      "none": "",
+      "previously": "previously",
+      "prior_testing": "prior testing",
+      "at_diagnosis": "at diagnosis",
+      "on_repeat_testing": "on repeat testing",
+      "historically": "historically",
+      "initial_testing": "initial testing",
+      "most_recent": "most recent testing"
+    }
+  },
+
+  "certainty_modifiers": {
+    "$schema_type": "weighted_variations",
+    "description": "Modifiers expressing confidence in the result",
+    "variations": {
+      "none": 0.78,
+      "suspected": 0.06,
+      "confirmed": 0.05,
+      "likely": 0.04,
+      "pending_confirmation": 0.03,
+      "to_be_confirmed": 0.02,
+      "rule_out": 0.02
+    },
+    "realizations": {
+      "none": "",
+      "suspected": "suspected",
+      "confirmed": "confirmed",
+      "likely": "likely",
+      "pending_confirmation": "pending confirmation",
+      "to_be_confirmed": "to be confirmed",
+      "rule_out": "rule out"
+    }
+  },
+
+  "test_methods": {
+    "$schema_type": "weighted_variations",
+    "description": "Testing methodologies that may appear alongside results. This is the canonical source of method realizations; biomarker-level preferred_methods overrides WEIGHTS only, not realizations.",
+    "variations": {
+      "unspecified": 0.38,
+      "NGS": 0.22,
+      "IHC": 0.10,
+      "FISH": 0.08,
+      "PCR": 0.06,
+      "liquid_biopsy": 0.05,
+      "ctDNA": 0.04,
+      "Sanger": 0.02,
+      "ddPCR": 0.02,
+      "RNA_seq": 0.02,
+      "comprehensive_genomic_profiling": 0.01
+    },
+    "realizations": {
+      "unspecified": "",
+      "NGS": "NGS",
+      "IHC": "IHC",
+      "FISH": "FISH",
+      "PCR": "PCR",
+      "liquid_biopsy": "liquid biopsy",
+      "ctDNA": "ctDNA",
+      "Sanger": "Sanger sequencing",
+      "ddPCR": "ddPCR",
+      "RNA_seq": "RNA-seq",
+      "comprehensive_genomic_profiling": "comprehensive genomic profiling"
+    }
+  },
+
+  "method_attribution_frames": {
+    "$schema_type": "weighted_variations",
+    "description": "How test methods are linked to results. Used when test_method != 'unspecified'. Realizations contain {method} and/or {result} placeholders filled at render time.",
+    "variations": {
+      "by_METHOD": 0.35,
+      "on_METHOD": 0.20,
+      "METHOD_colon_result": 0.15,
+      "per_METHOD": 0.10,
+      "METHOD_revealed": 0.10,
+      "via_METHOD": 0.05,
+      "METHOD_confirmed": 0.05
+    },
+    "realizations": {
+      "by_METHOD": "by {method}",
+      "on_METHOD": "on {method}",
+      "METHOD_colon_result": "{method}: {result}",
+      "per_METHOD": "per {method}",
+      "METHOD_revealed": "{method} revealed",
+      "via_METHOD": "via {method}",
+      "METHOD_confirmed": "{method} confirmed"
+    }
+  },
+
+  "list_connectors": {
+    "$schema_type": "weighted_variations",
+    "description": "How multiple biomarkers are joined in compound sentences",
+    "variations": {
+      "comma_and": 0.30,
+      "oxford_and": 0.20,
+      "semicolon": 0.20,
+      "comma_only": 0.15,
+      "newline": 0.08,
+      "and_only": 0.07
+    },
+    "realizations": {
+      "comma_and": ", and",
+      "oxford_and": ", and",
+      "semicolon": ";",
+      "comma_only": ",",
+      "newline": "\n",
+      "and_only": " and"
+    }
+  },
+
+  "technical_noise": {
+    "$schema_type": "post_process_transformations",
+    "description": "Surface-level typographic variations applied probabilistically during post-processing, AFTER all semantic composition. Each sub-dict is its own weighted distribution summing to 1.0. Loader validates per sub-dict, not on the outer object.",
+    "whitespace": {
+      "description": "Whitespace variation applied at token boundaries",
+      "distribution": {
+        "single_space": 0.85,
+        "double_space": 0.05,
+        "tab": 0.03,
+        "newline_mid_sentence": 0.04,
+        "no_space_after_punct": 0.03
+      }
+    },
+    "case_variation": {
+      "description": "Case transformation applied to entire sentence",
+      "distribution": {
+        "canonical": 0.92,
+        "all_lowercase": 0.04,
+        "all_uppercase": 0.02,
+        "title_case": 0.02
+      }
+    },
+    "hyphenation_gene_names": {
+      "description": "Specific to genes whose abbreviations are sometimes hyphenated (EGF-R, HER-2, PD-L1). Applied only to biomarker name renders.",
+      "distribution": {
+        "canonical": 0.80,
+        "hyphenated": 0.12,
+        "spaced": 0.05,
+        "linebroken": 0.03
+      }
+    },
+    "punctuation_variation": {
+      "description": "Punctuation artifacts commonly seen in real clinical text",
+      "distribution": {
+        "canonical": 0.90,
+        "missing_period": 0.05,
+        "extra_comma": 0.03,
+        "ocr_artifact": 0.02
+      }
+    },
+    "ocr_corruption": {
+      "description": "Visually-confusable character swaps (l/1, O/0, S/5, B/8, Z/2, I/l) simulating OCR misreads on scanned clinical documents. Length-preserving; never touches labeled spans.",
+      "distribution": {
+        "canonical": 0.93,
+        "light": 0.05,
+        "moderate": 0.02
+      }
+    },
+    "pdf_artifact": {
+      "description": "PDF-extraction artifacts: inserts a hyphenated linebreak ('-\\n') inside a non-labeled token to simulate a word broken across a page edge. Adjusts labeled spans to stay anchored.",
+      "distribution": {
+        "canonical": 0.96,
+        "hyphen_linebreak": 0.04
+      }
+    },
+    "abbreviation_inconsistency": {
+      "description": "When a rendered record contains two or more labeled mentions of the same canonical gene (e.g., L6 temporal_frame2: 'ERBB2 was positive at diagnosis; ERBB2 was negative post-TKI.'), re-render mention #2+ with an alternate alias drawn from biomarkers.json name_forms.variations, excluding mention #1's surface. Models real pathology-report drift between equivalent abbreviations (ERBB2/HER2/HER-2, PD-L1/PDL1/PD L1). Single-mention records are unaffected.",
+      "distribution": {
+        "canonical": 0.70,
+        "mixed": 0.30
+      }
+    }
+  }
+}

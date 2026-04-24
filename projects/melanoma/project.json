@@ -1,0 +1,13 @@
+{
+  "$schema_version": "1.0",
+  "name": "melanoma",
+  "display_name": "Cutaneous Melanoma",
+  "description": "Tier-1 biomarker panel (BRAF, NRAS, KIT, NF1, PD-L1, TMB) calibrated to cutaneous-melanoma prevalence priors from TCGA SKCM, the Melanoma Genomic Classification (Cancer Cell 2015), and targeted-sequencing meta-analyses of actionable alterations.",
+  "schema_type": "biomarker",
+  "configs": {
+    "common": "configs/common_variations.json",
+    "biomarkers": "configs/biomarkers.json"
+  },
+  "references_dir": "references",
+  "outputs_dir": "outputs"
+}

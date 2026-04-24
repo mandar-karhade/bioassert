@@ -1,0 +1,918 @@
+{
+  "$schema_version": "1.1",
+  "description": "Per-biomarker surface variations for the Tier 1 cutaneous melanoma biomarker panel (BRAF, NRAS, KIT, NF1, PD-L1, TMB). Weights are probabilities (floats summing to 1.0 per distribution, validated at load time). Priors seeded from TCGA SKCM, Hayward et al. Nature 2017, Cancer Genome Atlas Network Cell 2015, and targeted-sequencing meta-analyses.",
+  "_changelog": [
+    "v1.1: Initial melanoma panel — mirrors nsclc_adenocarcinoma schema v1.1 with cutaneous-melanoma-calibrated prevalences.",
+    "BRAF: V600-dominant (~88% V600E, ~7% V600K, rare V600R/D, non-V600). Status positive 0.45 (vs ~0.025 in adenocarcinoma).",
+    "NRAS: Q61-dominant (~88% of NRAS+), rare G12/G13 in cutaneous (vs mucosal). Status positive 0.20.",
+    "KIT: cutaneous-melanoma rate ~5% (vs 15-20% in acral/mucosal). Exon 11 > 13 > 17.",
+    "NF1: loss-of-function, heterogeneous, truncating dominant. Status positive 0.14.",
+    "PD-L1: cutaneous positivity ~40%; includes MEL score alongside TPS.",
+    "TMB: melanoma is canonical high-TMB disease (UV damage); status positive 0.60."
+  ],
+  "BRAF": {
+    "canonical_name": "B-Raf proto-oncogene, serine/threonine kinase",
+    "alteration_type": "mutation",
+    "gene_location": "7q34",
+    "name_forms": {
+      "variations": {
+        "BRAF": 0.70,
+        "BRAF_mutation": 0.12,
+        "B-RAF": 0.06,
+        "BRAF_V600": 0.04,
+        "BRAF_gene": 0.03,
+        "BRAF_full": 0.02,
+        "braf_lowercase": 0.03
+      },
+      "realizations": {
+        "BRAF": "BRAF",
+        "BRAF_mutation": "BRAF mutation",
+        "B-RAF": "B-RAF",
+        "BRAF_V600": "BRAF V600",
+        "BRAF_gene": "BRAF gene",
+        "BRAF_full": "v-raf murine sarcoma viral oncogene homolog B1",
+        "braf_lowercase": "braf"
+      }
+    },
+    "variants": {
+      "V600E": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.88,
+        "category": "V600",
+        "notes": "Glutamic acid for valine at codon 600 — canonical BRAF activating mutation, ~88% of BRAF-mutant melanomas. Dabrafenib/trametinib, encorafenib/binimetinib approved.",
+        "name_forms": {
+          "variations": {
+            "V600E": 0.52,
+            "p.V600E": 0.10,
+            "BRAF_V600E": 0.14,
+            "c.1799T_A": 0.04,
+            "p.Val600Glu": 0.05,
+            "V600E_mutation": 0.08,
+            "Val600Glu": 0.03,
+            "codon_600_E": 0.04
+          },
+          "realizations": {
+            "V600E": "V600E",
+            "p.V600E": "p.V600E",
+            "BRAF_V600E": "V600E",
+            "c.1799T_A": "c.1799T>A",
+            "p.Val600Glu": "p.Val600Glu",
+            "V600E_mutation": "V600E mutation",
+            "Val600Glu": "Val600Glu",
+            "codon_600_E": "codon 600 E"
+          }
+        }
+      },
+      "V600K": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.07,
+        "category": "V600",
+        "notes": "Lysine for valine at codon 600 — ~6-8% of BRAF-mutant melanomas, more prevalent in older patients and chronic sun-damaged skin. Same targeted therapy as V600E.",
+        "name_forms": {
+          "variations": {
+            "V600K": 0.55,
+            "p.V600K": 0.12,
+            "BRAF_V600K": 0.10,
+            "c.1798_1799GT_AA": 0.05,
+            "p.Val600Lys": 0.05,
+            "V600K_mutation": 0.08,
+            "Val600Lys": 0.05
+          },
+          "realizations": {
+            "V600K": "V600K",
+            "p.V600K": "p.V600K",
+            "BRAF_V600K": "V600K",
+            "c.1798_1799GT_AA": "c.1798_1799GT>AA",
+            "p.Val600Lys": "p.Val600Lys",
+            "V600K_mutation": "V600K mutation",
+            "Val600Lys": "Val600Lys"
+          }
+        }
+      },
+      "V600R": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.02,
+        "category": "V600",
+        "notes": "Arginine for valine at codon 600 — rare (~2%).",
+        "name_forms": {
+          "variations": {
+            "V600R": 0.60,
+            "p.V600R": 0.20,
+            "V600R_mutation": 0.12,
+            "Val600Arg": 0.08
+          },
+          "realizations": {
+            "V600R": "V600R",
+            "p.V600R": "p.V600R",
+            "V600R_mutation": "V600R mutation",
+            "Val600Arg": "Val600Arg"
+          }
+        }
+      },
+      "V600D": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.01,
+        "category": "V600",
+        "notes": "Aspartate for valine at codon 600 — very rare (~1%).",
+        "name_forms": {
+          "variations": {
+            "V600D": 0.65,
+            "p.V600D": 0.20,
+            "V600D_mutation": 0.15
+          },
+          "realizations": {
+            "V600D": "V600D",
+            "p.V600D": "p.V600D",
+            "V600D_mutation": "V600D mutation"
+          }
+        }
+      },
+      "non_V600_generic": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.02,
+        "category": "non_V600",
+        "notes": "Non-V600 BRAF alterations (e.g., class II/III) — not responsive to monotherapy vemurafenib/dabrafenib.",
+        "name_forms": {
+          "variations": {
+            "non_V600": 0.45,
+            "non_V600_mutation": 0.25,
+            "atypical_BRAF": 0.20,
+            "BRAF_class_II_III": 0.10
+          },
+          "realizations": {
+            "non_V600": "non-V600",
+            "non_V600_mutation": "non-V600 mutation",
+            "atypical_BRAF": "atypical BRAF mutation",
+            "BRAF_class_II_III": "class II/III BRAF alteration"
+          }
+        }
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.50,
+        "PCR": 0.20,
+        "IHC": 0.15,
+        "Sanger": 0.05,
+        "liquid_biopsy": 0.05,
+        "unspecified": 0.05
+      }
+    },
+    "status_distribution": {
+      "positive": 0.45,
+      "negative": 0.52,
+      "equivocal": 0.01,
+      "not_tested": 0.02
+    }
+  },
+  "NRAS": {
+    "canonical_name": "Neuroblastoma RAS viral oncogene homolog",
+    "alteration_type": "mutation",
+    "gene_location": "1p13.2",
+    "name_forms": {
+      "variations": {
+        "NRAS": 0.72,
+        "NRAS_mutation": 0.12,
+        "NRAS_gene": 0.04,
+        "N-RAS": 0.03,
+        "NRAS_full": 0.02,
+        "nras_lowercase": 0.04,
+        "NRAS_Q61": 0.03
+      },
+      "realizations": {
+        "NRAS": "NRAS",
+        "NRAS_mutation": "NRAS mutation",
+        "NRAS_gene": "NRAS gene",
+        "N-RAS": "N-RAS",
+        "NRAS_full": "Neuroblastoma RAS viral oncogene homolog",
+        "nras_lowercase": "nras",
+        "NRAS_Q61": "NRAS Q61"
+      }
+    },
+    "variants": {
+      "Q61R": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.40,
+        "category": "Q61_hotspot",
+        "notes": "Arginine for glutamine at codon 61 — most common NRAS variant in cutaneous melanoma.",
+        "name_forms": {
+          "variations": {
+            "Q61R": 0.55,
+            "p.Q61R": 0.15,
+            "NRAS_Q61R": 0.10,
+            "c.182A_G": 0.05,
+            "p.Gln61Arg": 0.05,
+            "Q61R_mutation": 0.08,
+            "Gln61Arg": 0.02
+          },
+          "realizations": {
+            "Q61R": "Q61R",
+            "p.Q61R": "p.Q61R",
+            "NRAS_Q61R": "Q61R",
+            "c.182A_G": "c.182A>G",
+            "p.Gln61Arg": "p.Gln61Arg",
+            "Q61R_mutation": "Q61R mutation",
+            "Gln61Arg": "Gln61Arg"
+          }
+        }
+      },
+      "Q61K": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.32,
+        "category": "Q61_hotspot",
+        "notes": "Lysine for glutamine at codon 61 — second most common NRAS variant.",
+        "name_forms": {
+          "variations": {
+            "Q61K": 0.55,
+            "p.Q61K": 0.15,
+            "NRAS_Q61K": 0.10,
+            "c.181C_A": 0.05,
+            "p.Gln61Lys": 0.05,
+            "Q61K_mutation": 0.08,
+            "Gln61Lys": 0.02
+          },
+          "realizations": {
+            "Q61K": "Q61K",
+            "p.Q61K": "p.Q61K",
+            "NRAS_Q61K": "Q61K",
+            "c.181C_A": "c.181C>A",
+            "p.Gln61Lys": "p.Gln61Lys",
+            "Q61K_mutation": "Q61K mutation",
+            "Gln61Lys": "Gln61Lys"
+          }
+        }
+      },
+      "Q61L": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.13,
+        "category": "Q61_hotspot",
+        "name_forms": {
+          "variations": {
+            "Q61L": 0.60,
+            "p.Q61L": 0.18,
+            "Q61L_mutation": 0.10,
+            "p.Gln61Leu": 0.07,
+            "Gln61Leu": 0.05
+          },
+          "realizations": {
+            "Q61L": "Q61L",
+            "p.Q61L": "p.Q61L",
+            "Q61L_mutation": "Q61L mutation",
+            "p.Gln61Leu": "p.Gln61Leu",
+            "Gln61Leu": "Gln61Leu"
+          }
+        }
+      },
+      "Q61H": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.05,
+        "category": "Q61_hotspot",
+        "name_forms": {
+          "variations": {
+            "Q61H": 0.65,
+            "p.Q61H": 0.20,
+            "Q61H_mutation": 0.10,
+            "p.Gln61His": 0.05
+          },
+          "realizations": {
+            "Q61H": "Q61H",
+            "p.Q61H": "p.Q61H",
+            "Q61H_mutation": "Q61H mutation",
+            "p.Gln61His": "p.Gln61His"
+          }
+        }
+      },
+      "G12D": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.04,
+        "category": "G12_G13_cutaneous_rare",
+        "notes": "G12/G13 NRAS mutations are more common in mucosal (~46%) than cutaneous (~12%) melanoma.",
+        "name_forms": {
+          "variations": {
+            "G12D": 0.60,
+            "p.G12D": 0.20,
+            "G12D_mutation": 0.12,
+            "p.Gly12Asp": 0.08
+          },
+          "realizations": {
+            "G12D": "G12D",
+            "p.G12D": "p.G12D",
+            "G12D_mutation": "G12D mutation",
+            "p.Gly12Asp": "p.Gly12Asp"
+          }
+        }
+      },
+      "G13R": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.04,
+        "category": "G12_G13_cutaneous_rare",
+        "name_forms": {
+          "variations": {
+            "G13R": 0.60,
+            "p.G13R": 0.20,
+            "G13R_mutation": 0.12,
+            "p.Gly13Arg": 0.08
+          },
+          "realizations": {
+            "G13R": "G13R",
+            "p.G13R": "p.G13R",
+            "G13R_mutation": "G13R mutation",
+            "p.Gly13Arg": "p.Gly13Arg"
+          }
+        }
+      },
+      "other_NRAS_mutation": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.02,
+        "category": "other",
+        "notes": "Other NRAS variants pooled (G12V, G12C, rare point mutations).",
+        "name_forms": {
+          "variations": {
+            "NRAS_other": 0.50,
+            "NRAS_rare_variant": 0.30,
+            "NRAS_variant_unspecified": 0.20
+          },
+          "realizations": {
+            "NRAS_other": "other NRAS mutation",
+            "NRAS_rare_variant": "rare NRAS variant",
+            "NRAS_variant_unspecified": "NRAS variant"
+          }
+        }
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.65,
+        "PCR": 0.15,
+        "Sanger": 0.05,
+        "liquid_biopsy": 0.05,
+        "unspecified": 0.10
+      }
+    },
+    "status_distribution": {
+      "positive": 0.20,
+      "negative": 0.77,
+      "equivocal": 0.01,
+      "not_tested": 0.02
+    }
+  },
+  "KIT": {
+    "canonical_name": "KIT proto-oncogene, receptor tyrosine kinase",
+    "alteration_type": "mutation",
+    "gene_location": "4q12",
+    "name_forms": {
+      "variations": {
+        "KIT": 0.55,
+        "c-KIT": 0.18,
+        "KIT_mutation": 0.10,
+        "CD117": 0.06,
+        "KIT_gene": 0.04,
+        "c-kit_lowercase": 0.04,
+        "KIT_full": 0.03
+      },
+      "realizations": {
+        "KIT": "KIT",
+        "c-KIT": "c-KIT",
+        "KIT_mutation": "KIT mutation",
+        "CD117": "CD117",
+        "KIT_gene": "KIT gene",
+        "c-kit_lowercase": "c-kit",
+        "KIT_full": "mast/stem cell growth factor receptor"
+      }
+    },
+    "variants": {
+      "L576P_exon11": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.30,
+        "category": "exon_11",
+        "notes": "Exon 11 — most common KIT mutation in melanoma; imatinib-responsive.",
+        "name_forms": {
+          "variations": {
+            "L576P": 0.55,
+            "p.L576P": 0.18,
+            "exon_11_L576P": 0.12,
+            "L576P_mutation": 0.10,
+            "p.Leu576Pro": 0.05
+          },
+          "realizations": {
+            "L576P": "L576P",
+            "p.L576P": "p.L576P",
+            "exon_11_L576P": "exon 11 L576P",
+            "L576P_mutation": "L576P mutation",
+            "p.Leu576Pro": "p.Leu576Pro"
+          }
+        }
+      },
+      "W557R_exon11": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.14,
+        "category": "exon_11",
+        "name_forms": {
+          "variations": {
+            "W557R": 0.60,
+            "p.W557R": 0.20,
+            "W557R_mutation": 0.12,
+            "p.Trp557Arg": 0.08
+          },
+          "realizations": {
+            "W557R": "W557R",
+            "p.W557R": "p.W557R",
+            "W557R_mutation": "W557R mutation",
+            "p.Trp557Arg": "p.Trp557Arg"
+          }
+        }
+      },
+      "K642E_exon13": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.22,
+        "category": "exon_13",
+        "notes": "Exon 13 — second most common region in melanoma KIT mutations; imatinib-responsive.",
+        "name_forms": {
+          "variations": {
+            "K642E": 0.55,
+            "p.K642E": 0.20,
+            "exon_13_K642E": 0.12,
+            "K642E_mutation": 0.08,
+            "p.Lys642Glu": 0.05
+          },
+          "realizations": {
+            "K642E": "K642E",
+            "p.K642E": "p.K642E",
+            "exon_13_K642E": "exon 13 K642E",
+            "K642E_mutation": "K642E mutation",
+            "p.Lys642Glu": "p.Lys642Glu"
+          }
+        }
+      },
+      "D816V_exon17": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.10,
+        "category": "exon_17",
+        "notes": "Exon 17 D816V — imatinib-resistant; predicts poor response to TKIs.",
+        "name_forms": {
+          "variations": {
+            "D816V": 0.55,
+            "p.D816V": 0.20,
+            "exon_17_D816V": 0.12,
+            "D816V_mutation": 0.08,
+            "p.Asp816Val": 0.05
+          },
+          "realizations": {
+            "D816V": "D816V",
+            "p.D816V": "p.D816V",
+            "exon_17_D816V": "exon 17 D816V",
+            "D816V_mutation": "D816V mutation",
+            "p.Asp816Val": "p.Asp816Val"
+          }
+        }
+      },
+      "V559A_exon11": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.08,
+        "category": "exon_11",
+        "name_forms": {
+          "variations": {
+            "V559A": 0.60,
+            "p.V559A": 0.20,
+            "V559A_mutation": 0.12,
+            "p.Val559Ala": 0.08
+          },
+          "realizations": {
+            "V559A": "V559A",
+            "p.V559A": "p.V559A",
+            "V559A_mutation": "V559A mutation",
+            "p.Val559Ala": "p.Val559Ala"
+          }
+        }
+      },
+      "N822K_exon17": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.06,
+        "category": "exon_17",
+        "name_forms": {
+          "variations": {
+            "N822K": 0.60,
+            "p.N822K": 0.20,
+            "N822K_mutation": 0.12,
+            "p.Asn822Lys": 0.08
+          },
+          "realizations": {
+            "N822K": "N822K",
+            "p.N822K": "p.N822K",
+            "N822K_mutation": "N822K mutation",
+            "p.Asn822Lys": "p.Asn822Lys"
+          }
+        }
+      },
+      "exon_11_generic": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.10,
+        "category": "exon_11",
+        "notes": "Exon 11 alterations pooled (non-hotspot).",
+        "name_forms": {
+          "variations": {
+            "exon_11_mutation": 0.45,
+            "exon_11_alteration": 0.25,
+            "exon_11_variant": 0.20,
+            "exon_11_generic": 0.10
+          },
+          "realizations": {
+            "exon_11_mutation": "exon 11 mutation",
+            "exon_11_alteration": "exon 11 alteration",
+            "exon_11_variant": "exon 11 variant",
+            "exon_11_generic": "exon 11"
+          }
+        }
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.60,
+        "IHC": 0.15,
+        "PCR": 0.10,
+        "Sanger": 0.05,
+        "unspecified": 0.10
+      }
+    },
+    "status_distribution": {
+      "positive": 0.05,
+      "negative": 0.92,
+      "equivocal": 0.01,
+      "not_tested": 0.02
+    }
+  },
+  "NF1": {
+    "canonical_name": "Neurofibromin 1",
+    "alteration_type": "mutation",
+    "gene_location": "17q11.2",
+    "name_forms": {
+      "variations": {
+        "NF1": 0.68,
+        "NF1_mutation": 0.12,
+        "neurofibromin": 0.05,
+        "NF1_gene": 0.05,
+        "NF-1": 0.04,
+        "NF1_loss": 0.03,
+        "nf1_lowercase": 0.03
+      },
+      "realizations": {
+        "NF1": "NF1",
+        "NF1_mutation": "NF1 mutation",
+        "neurofibromin": "neurofibromin",
+        "NF1_gene": "NF1 gene",
+        "NF-1": "NF-1",
+        "NF1_loss": "NF1 loss-of-function",
+        "nf1_lowercase": "nf1"
+      }
+    },
+    "variants": {
+      "truncating": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.50,
+        "category": "loss_of_function",
+        "notes": "Frameshift or nonsense truncating mutation — dominant class in NF1-mutant melanoma.",
+        "name_forms": {
+          "variations": {
+            "truncating_mutation": 0.40,
+            "frameshift": 0.25,
+            "LOF_truncating": 0.15,
+            "premature_stop": 0.10,
+            "truncation": 0.10
+          },
+          "realizations": {
+            "truncating_mutation": "truncating mutation",
+            "frameshift": "frameshift",
+            "LOF_truncating": "loss-of-function (truncating)",
+            "premature_stop": "premature stop codon",
+            "truncation": "truncation"
+          }
+        }
+      },
+      "nonsense": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.15,
+        "category": "loss_of_function",
+        "name_forms": {
+          "variations": {
+            "nonsense_mutation": 0.55,
+            "stop_gained": 0.25,
+            "nonsense": 0.20
+          },
+          "realizations": {
+            "nonsense_mutation": "nonsense mutation",
+            "stop_gained": "stop-gained",
+            "nonsense": "nonsense"
+          }
+        }
+      },
+      "splice_site": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.18,
+        "category": "loss_of_function",
+        "name_forms": {
+          "variations": {
+            "splice_site": 0.45,
+            "splice_variant": 0.25,
+            "splice_mutation": 0.20,
+            "splicing_defect": 0.10
+          },
+          "realizations": {
+            "splice_site": "splice-site mutation",
+            "splice_variant": "splice variant",
+            "splice_mutation": "splicing mutation",
+            "splicing_defect": "splicing defect"
+          }
+        }
+      },
+      "missense_hotspot": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.07,
+        "category": "missense",
+        "name_forms": {
+          "variations": {
+            "missense": 0.50,
+            "missense_mutation": 0.30,
+            "missense_hotspot": 0.20
+          },
+          "realizations": {
+            "missense": "missense mutation",
+            "missense_mutation": "missense variant",
+            "missense_hotspot": "missense hotspot mutation"
+          }
+        }
+      },
+      "deletion": {
+        "actionable": false,
+        "prevalence_within_biomarker": 0.10,
+        "category": "loss_of_function",
+        "name_forms": {
+          "variations": {
+            "deletion": 0.45,
+            "whole_gene_deletion": 0.20,
+            "intragenic_deletion": 0.20,
+            "large_deletion": 0.15
+          },
+          "realizations": {
+            "deletion": "deletion",
+            "whole_gene_deletion": "whole-gene deletion",
+            "intragenic_deletion": "intragenic deletion",
+            "large_deletion": "large deletion"
+          }
+        }
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.75,
+        "comprehensive_genomic_profiling": 0.10,
+        "Sanger": 0.03,
+        "liquid_biopsy": 0.02,
+        "unspecified": 0.10
+      }
+    },
+    "status_distribution": {
+      "positive": 0.14,
+      "negative": 0.83,
+      "equivocal": 0.01,
+      "not_tested": 0.02
+    }
+  },
+  "PD-L1": {
+    "canonical_name": "Programmed Death-Ligand 1",
+    "alteration_type": "expression",
+    "gene_location": "9p24.1",
+    "name_forms": {
+      "variations": {
+        "PD-L1": 0.50,
+        "PDL1": 0.15,
+        "PD_L1": 0.08,
+        "CD274": 0.06,
+        "PD-L1_expression": 0.07,
+        "B7-H1": 0.03,
+        "pd-l1_lowercase": 0.05,
+        "Pd-L1_titlecase": 0.06
+      },
+      "realizations": {
+        "PD-L1": "PD-L1",
+        "PDL1": "PDL1",
+        "PD_L1": "PD L1",
+        "CD274": "CD274",
+        "PD-L1_expression": "PD-L1 expression",
+        "B7-H1": "B7-H1",
+        "pd-l1_lowercase": "pd-l1",
+        "Pd-L1_titlecase": "Pd-L1"
+      }
+    },
+    "variants": {
+      "TPS_high": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.30,
+        "category": "high_expression",
+        "notes": "TPS >= 50% — strong immunotherapy response indicator.",
+        "measurement_range": [50.0, 100.0],
+        "name_forms": {
+          "variations": {
+            "TPS_high": 0.30,
+            "TPS_geq_50": 0.25,
+            "TPS_X_percent": 0.20,
+            "PD-L1_high": 0.10,
+            "high_expression_phrase": 0.08,
+            "strong_positive": 0.07
+          },
+          "realizations": {
+            "TPS_high": "TPS high",
+            "TPS_geq_50": "TPS \u2265 50%",
+            "TPS_X_percent": "TPS {value}%",
+            "PD-L1_high": "high PD-L1",
+            "high_expression_phrase": "high expression",
+            "strong_positive": "strongly positive"
+          }
+        }
+      },
+      "TPS_intermediate": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.55,
+        "category": "intermediate_expression",
+        "notes": "TPS 1-49% — intermediate expression.",
+        "measurement_range": [1.0, 49.0],
+        "name_forms": {
+          "variations": {
+            "TPS_intermediate": 0.25,
+            "TPS_1_to_49": 0.22,
+            "TPS_X_percent": 0.30,
+            "intermediate_expression": 0.08,
+            "weak_positive": 0.07,
+            "low_positive": 0.08
+          },
+          "realizations": {
+            "TPS_intermediate": "TPS intermediate",
+            "TPS_1_to_49": "TPS 1-49%",
+            "TPS_X_percent": "TPS {value}%",
+            "intermediate_expression": "intermediate expression",
+            "weak_positive": "weakly positive",
+            "low_positive": "low positive"
+          }
+        }
+      },
+      "MEL_score": {
+        "actionable": true,
+        "prevalence_within_biomarker": 0.15,
+        "category": "melanoma_specific_score",
+        "notes": "MEL score 1-5 (melanoma-specific PD-L1 IHC scoring, Daud et al.).",
+        "measurement_range": [1.0, 5.0],
+        "name_forms": {
+          "variations": {
+            "MEL_score": 0.40,
+            "MEL_score_X": 0.30,
+            "MEL_grade": 0.15,
+            "MEL_IHC": 0.15
+          },
+          "realizations": {
+            "MEL_score": "MEL score",
+            "MEL_score_X": "MEL score {value}",
+            "MEL_grade": "MEL grade {value}",
+            "MEL_IHC": "MEL IHC {value}"
+          }
+        }
+      }
+    },
+    "negative_forms": {
+      "variations": {
+        "TPS_less_than_1": 0.40,
+        "TPS_X_percent_low": 0.25,
+        "no_expression": 0.12,
+        "MEL_0": 0.08,
+        "negative_expression": 0.10,
+        "absent": 0.05
+      },
+      "realizations": {
+        "TPS_less_than_1": "TPS < 1%",
+        "TPS_X_percent_low": "TPS {value}%",
+        "no_expression": "no PD-L1 expression",
+        "MEL_0": "MEL 0",
+        "negative_expression": "negative expression",
+        "absent": "absent"
+      },
+      "measurement_range_for_value_placeholder": [0, 0]
+    },
+    "clone_attribution": {
+      "$schema_type": "weighted_variations_with_attachment",
+      "description": "IHC antibody clone attribution for PD-L1. Sampled independently of the TPS/MEL variant: first roll a Bernoulli with attachment_probability, then sample a clone from variations if attached.",
+      "attachment_probability": 0.35,
+      "variations": {
+        "clone_22C3": 0.35,
+        "clone_28-8": 0.25,
+        "clone_SP263": 0.20,
+        "clone_SP142": 0.10,
+        "clone_QR1": 0.05,
+        "clone_with_company": 0.05
+      },
+      "realizations": {
+        "clone_22C3": "(Clone 22C3)",
+        "clone_28-8": "(Clone 28-8)",
+        "clone_SP263": "(Clone SP263)",
+        "clone_SP142": "(Clone SP142)",
+        "clone_QR1": "(Clone QR1)",
+        "clone_with_company": "(Dako 22C3 pharmDx)"
+      }
+    },
+    "preferred_methods": {
+      "variations": {
+        "IHC": 0.88,
+        "unspecified": 0.12
+      }
+    },
+    "status_distribution": {
+      "positive": 0.40,
+      "negative": 0.55,
+      "equivocal": 0.03,
+      "not_tested": 0.02
+    }
+  },
+  "TMB": {
+    "canonical_name": "Tumor Mutational Burden",
+    "alteration_type": "expression",
+    "gene_location": "genome-wide",
+    "name_forms": {
+      "variations": {
+        "TMB": 0.55,
+        "tumor_mutational_burden": 0.12,
+        "TMB_score": 0.08,
+        "mutational_burden": 0.06,
+        "TMB_high_phrase": 0.05,
+        "mutational_load": 0.05,
+        "tmb_lowercase": 0.05,
+        "TMB_full": 0.04
+      },
+      "realizations": {
+        "TMB": "TMB",
+        "tumor_mutational_burden": "tumor mutational burden",
+        "TMB_score": "TMB score",
+        "mutational_burden": "mutational burden",
+        "TMB_high_phrase": "TMB-high",
+        "mutational_load": "mutational load",
+        "tmb_lowercase": "tmb",
+        "TMB_full": "tumor mutation burden"
+      }
+    },
+    "variants": {
+      "TMB_high": {
+        "actionable": true,
+        "prevalence_within_biomarker": 1.0,
+        "category": "high_burden",
+        "notes": "TMB >= 10 mut/Mb — FDA pan-tumor threshold; melanoma median ~15 mut/Mb due to UV damage.",
+        "measurement_range": [10.0, 100.0],
+        "name_forms": {
+          "variations": {
+            "TMB_high": 0.35,
+            "TMB_X_mut_Mb": 0.25,
+            "TMB_high_value": 0.15,
+            "TMB_geq_10": 0.10,
+            "high_TMB": 0.08,
+            "TMB_elevated": 0.07
+          },
+          "realizations": {
+            "TMB_high": "TMB-high",
+            "TMB_X_mut_Mb": "{value} mut/Mb",
+            "TMB_high_value": "TMB-high ({value} mut/Mb)",
+            "TMB_geq_10": "TMB \u2265 10 mut/Mb",
+            "high_TMB": "high",
+            "TMB_elevated": "elevated"
+          }
+        }
+      }
+    },
+    "negative_forms": {
+      "variations": {
+        "TMB_low": 0.35,
+        "TMB_X_mut_Mb_low": 0.25,
+        "TMB_lt_10": 0.15,
+        "low_TMB": 0.10,
+        "TMB_not_elevated": 0.08,
+        "below_threshold": 0.07
+      },
+      "realizations": {
+        "TMB_low": "TMB-low",
+        "TMB_X_mut_Mb_low": "{value} mut/Mb",
+        "TMB_lt_10": "TMB < 10 mut/Mb",
+        "low_TMB": "low",
+        "TMB_not_elevated": "not elevated",
+        "below_threshold": "below threshold"
+      },
+      "measurement_range_for_value_placeholder": [0, 9]
+    },
+    "preferred_methods": {
+      "variations": {
+        "NGS": 0.65,
+        "comprehensive_genomic_profiling": 0.25,
+        "unspecified": 0.10
+      }
+    },
+    "status_distribution": {
+      "positive": 0.60,
+      "negative": 0.35,
+      "equivocal": 0.03,
+      "not_tested": 0.02
+    }
+  }
+}

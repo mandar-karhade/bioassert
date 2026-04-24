@@ -40,22 +40,28 @@ from bioassert.generator.renderer import (
 from bioassert.project import Project, ProjectError
 from bioassert.validator import ValidationError, validate_run, write_validation_report
 
-MUTATION_BIOMARKERS: tuple[str, ...] = (
-    "EGFR",
-    "KRAS",
-    "BRAF",
-    "ALK",
-    "ROS1",
-    "RET",
-    "NTRK",
-    "MET",
-    "ERBB2",
-)
-EXPRESSION_BIOMARKERS: tuple[str, ...] = ("PD-L1", "TMB")
-PANEL_BIOMARKERS: tuple[str, ...] = MUTATION_BIOMARKERS + EXPRESSION_BIOMARKERS
-
 L3_EXPRESSION_CLASS_PROB = 0.15
 _COMPOUND_LEVELS: frozenset[str] = frozenset({"L3", "L3S", "L4", "L4S", "L5"})
+
+
+def _split_panel(project: Project) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Derive the mutation/expression panel lists from the project's biomarkers.
+
+    Panels are ordered by the biomarker insertion order in ``biomarkers.json``,
+    so each project controls its own canonical gene list.
+    """
+    mutations: list[str] = []
+    expressions: list[str] = []
+    for name, biomarker in project.biomarkers.biomarkers.items():
+        if biomarker.alteration_type == "mutation":
+            mutations.append(name)
+        elif biomarker.alteration_type == "expression":
+            expressions.append(name)
+    if not mutations and not expressions:
+        raise ProjectError(
+            f"project {project.name!r} has no biomarkers"
+        )
+    return tuple(mutations), tuple(expressions)
 
 DEFAULT_N = 50_000
 DEFAULT_SEED = 42
@@ -68,11 +74,21 @@ def _sample_tier(rng: random.Random, low: float) -> str:
     return "low" if rng.random() < low else "high"
 
 
-def _compound_pool(tier: str, rng: random.Random) -> list[str]:
+def _compound_pool(
+    tier: str,
+    rng: random.Random,
+    mutation_panel: tuple[str, ...],
+    expression_panel: tuple[str, ...],
+    full_panel: tuple[str, ...],
+) -> list[str]:
     if tier == "high":
-        return list(PANEL_BIOMARKERS)
+        return list(full_panel)
+    if not expression_panel:
+        return list(mutation_panel)
+    if not mutation_panel:
+        return list(expression_panel)
     pool_is_expression = rng.random() < L3_EXPRESSION_CLASS_PROB
-    return list(EXPRESSION_BIOMARKERS if pool_is_expression else MUTATION_BIOMARKERS)
+    return list(expression_panel if pool_is_expression else mutation_panel)
 
 
 def _iter_records(
@@ -91,6 +107,8 @@ def _iter_records(
 ) -> Iterator[tuple[str, PostProcessedRecord]]:
     common = project.common
     biomarkers = project.biomarkers
+    mutation_panel, expression_panel = _split_panel(project)
+    full_panel = mutation_panel + expression_panel
     rng = random.Random(seed)
     for _ in range(n):
         roll = rng.random()
@@ -103,7 +121,7 @@ def _iter_records(
         l7_bound = l6_bound + l7_fraction
         if roll < l3s_bound:
             tier = _sample_tier(rng, compound_low)
-            pool = _compound_pool(tier, rng)
+            pool = _compound_pool(tier, rng, mutation_panel, expression_panel, full_panel)
             level = "L3" if roll < l3_prose_bound else "L3S"
             rendered = render_l3_record(
                 pool, biomarkers, common, rng,
@@ -115,7 +133,7 @@ def _iter_records(
             continue
         if roll < l4s_bound:
             tier = _sample_tier(rng, compound_low)
-            pool = _compound_pool(tier, rng)
+            pool = _compound_pool(tier, rng, mutation_panel, expression_panel, full_panel)
             level = "L4" if roll < l4_bound else "L4S"
             rendered = render_l4_record(
                 pool, biomarkers, common, rng,
@@ -127,7 +145,7 @@ def _iter_records(
             continue
         if roll < l5_bound:
             tier = _sample_tier(rng, compound_low)
-            pool = _compound_pool(tier, rng)
+            pool = _compound_pool(tier, rng, mutation_panel, expression_panel, full_panel)
             rendered = render_l5_record(
                 pool, biomarkers, common, rng,
                 compounding_tier=tier,
@@ -137,19 +155,19 @@ def _iter_records(
             continue
         if roll < l6_bound:
             rendered = render_l6_record(
-                list(PANEL_BIOMARKERS), biomarkers, common, rng
+                list(full_panel), biomarkers, common, rng
             )
             post = apply_technical_noise(rendered, common, biomarkers, rng)
             yield rendered.assertions[0].gene, post
             continue
         if roll < l7_bound:
             rendered = render_l7_record(
-                list(PANEL_BIOMARKERS), biomarkers, common, rng
+                list(full_panel), biomarkers, common, rng
             )
             post = apply_technical_noise(rendered, common, biomarkers, rng)
             yield rendered.assertions[0].gene, post
             continue
-        gene = rng.choice(PANEL_BIOMARKERS)
+        gene = rng.choice(full_panel)
         complexity_level = "L2" if roll < l7_bound + l2_fraction else "L1"
         rendered = render_l1_record(
             gene, biomarkers, common, rng,
@@ -507,7 +525,7 @@ def _generate(args: argparse.Namespace) -> int:
         "compound_tier_by_level": {
             level: dict(counts) for level, counts in sorted(tier_by_level.items())
         },
-        "panel_biomarkers": list(PANEL_BIOMARKERS),
+        "panel_biomarkers": list(project.biomarkers.biomarkers.keys()),
         "within_2sigma_count": within_2sigma,
         "total_checks": total_checks,
         "within_2sigma_ratio": round(within_2sigma / max(total_checks, 1), 4),
